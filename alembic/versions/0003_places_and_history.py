@@ -31,22 +31,21 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_places_osm UNIQUE (osm_type, osm_id)
-        );
-        CREATE INDEX ix_places_status_category ON places (status, category);
-        CREATE INDEX ix_places_coordinates ON places USING gist (coordinates);
-
+        )
+    """)
+    op.execute("CREATE INDEX ix_places_status_category ON places (status, category)")
+    op.execute("CREATE INDEX ix_places_coordinates ON places USING gist (coordinates)")
+    op.execute("""
         CREATE TABLE user_place_history (
             id UUID PRIMARY KEY,
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
             last_completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_user_place UNIQUE (user_id, place_id)
-        );
+        )
     """)
 
 
 def downgrade() -> None:
-    op.execute("""
-        DROP TABLE IF EXISTS user_place_history;
-        DROP TABLE IF EXISTS places;
-    """)
+    op.execute("DROP TABLE IF EXISTS user_place_history")
+    op.execute("DROP TABLE IF EXISTS places")
