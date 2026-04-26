@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     login_rate_limit_max: int = 5
     login_rate_limit_window_seconds: int = 60 * 15  # 15 min
 
+    # Ollama Cloud
+    ollama_api_key: str = ""
+    ollama_base_url: str = "https://ollama.com/v1"
+    ollama_model: str = "gpt-oss:120b"
+    ollama_timeout_seconds: int = 15
+
 
 @lru_cache
 def get_settings() -> Settings:
