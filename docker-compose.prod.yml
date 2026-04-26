@@ -1,0 +1,33 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    restart: unless-stopped
+    # In prod we drop the host port publishing — Caddy reaches it via the docker network
+    ports: !reset []
+    environment:
+      APP_ENV: production
+
+  db:
+    restart: unless-stopped
+    ports: !reset []   # internal only
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []   # internal only
+
+volumes:
+  caddy_data:
+  caddy_config:
