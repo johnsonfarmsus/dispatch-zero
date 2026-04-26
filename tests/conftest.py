@@ -1,5 +1,6 @@
 import os
 
+import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 from httpx import ASGITransport, AsyncClient
@@ -12,9 +13,18 @@ assert os.environ.get("DATABASE_URL"), "DATABASE_URL must be set (run via docker
 assert os.environ.get("REDIS_URL"), "REDIS_URL must be set (run via docker-compose.test.yml)"
 assert os.environ.get("SESSION_SECRET"), "SESSION_SECRET must be set"
 
+from dispatchzero.config import get_settings  # noqa: E402
 from dispatchzero.db import get_session  # noqa: E402
 from dispatchzero.main import app  # noqa: E402
 from dispatchzero.models import Base  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    """Ensure each test gets a fresh Settings instance so monkeypatch.setenv() takes effect."""
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest_asyncio.fixture
