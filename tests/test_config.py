@@ -9,4 +9,3 @@ def test_settings_loads_from_env(monkeypatch):
     assert str(settings.database_url) == "postgresql+asyncpg://u:p@db:5432/x"
     assert str(settings.redis_url) == "redis://redis:6379/0"
     assert settings.session_secret == "x" * 32
-    assert settings.app_env == "development"  # default

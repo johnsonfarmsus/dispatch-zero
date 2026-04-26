@@ -1,0 +1,17 @@
+services:
+  test:
+    build:
+      context: .
+      target: test
+    env_file: .env
+    environment:
+      # Override DB to use a dedicated test database on the same Postgres instance
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/dispatchzero_test
+      # Use Redis DB index 15 for tests to keep prod-side data untouched
+      REDIS_URL: redis://redis:6379/15
+      APP_ENV: test
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
