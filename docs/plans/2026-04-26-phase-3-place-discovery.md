@@ -1927,7 +1927,15 @@ Expected: `0003 (head)`.
 
 - [ ] **Step 10.3: Curl a real signup → /places/nearby flow against prod**
 
-Use a known coordinate that should have public art / monuments — pick somewhere close to where Trevor will actually walk, OR use a hand-picked downtown coordinate (e.g. Cleveland Public Square: `41.4994,-81.6954`, or any other dense urban area).
+Smoke-test coordinate: **downtown Spokane, WA — Riverfront Park** (`47.6588, -117.4260`). A direct Overpass query against this point with a 2 km radius (run 2026-04-26 to validate the plan) returned 104 raw OSM elements, normalizing to ~68 named places across all five categories. Sample of what we expect Task 10 to surface (top items per category):
+
+| Category | Sample names found in 2 km of (47.6588, -117.4260) |
+|---|---|
+| **mural** (2) | Fish Eye View; Black Lives Matter |
+| **sculpture** (23) | Abraham Lincoln; Expo 74 Butterfly; The Joy of Running Together; Footsteps to the Future; Centennial Sculpture; Al's Cube |
+| **memorial** (7) | Vietnam Veterans Memorial; Michael P Anderson; Milk Bottle; Historic Chinatown |
+| **historic** (30) | Woman's Club of Spokane; Spokane Fire Station #9; Graham House; Monroe House; Hanauer-Cook House |
+| **viewpoint** (6) | Lower Falls; Inspiration Point; Cliff Park Viewpoint; Edwidge Wilson Park Viewpoint |
 
 ```bash
 COOKIES=$(mktemp)
@@ -1938,16 +1946,16 @@ curl -sS -c "$COOKIES" -X POST https://dispatchzero.ataary.com/auth/signup \
   -d '{"callsign":"smoketest_p3","password":"smoketest-very-long-password","adventure_style":"agency"}'
 echo
 
-# Discover nearby — use a known coordinate
+# Discover nearby — Spokane Riverfront Park
 curl -sS -b "$COOKIES" \
-  "https://dispatchzero.ataary.com/places/nearby?lat=41.4994&lng=-81.6954&radius_m=2000&limit=5" \
+  "https://dispatchzero.ataary.com/places/nearby?lat=47.6588&lng=-117.4260&radius_m=2000&limit=10" \
   | python3 -m json.tool
 echo
 
 # Cache hit verification — second call should be much faster
 echo "--- second call (warm cache) ---"
 time curl -sS -b "$COOKIES" \
-  "https://dispatchzero.ataary.com/places/nearby?lat=41.4994&lng=-81.6954&radius_m=2000&limit=5" \
+  "https://dispatchzero.ataary.com/places/nearby?lat=47.6588&lng=-117.4260&radius_m=2000&limit=10" \
   > /dev/null
 
 rm -f "$COOKIES"
@@ -1955,8 +1963,8 @@ rm -f "$COOKIES"
 
 Expected:
 - Signup returns the user JSON.
-- /places/nearby returns ≥3 places with names, categories, and (optionally) descriptions.
-- Second call is sub-200ms.
+- /places/nearby returns up to 10 ranked places drawn from the ~68-place Spokane downtown pool. Murals and sculptures should rank near the top of the list (category bonus).
+- Second call is sub-200ms (Overpass response cached for 7 days; Wikidata enrichment cached for 30 days).
 
 - [ ] **Step 10.4: Inspect what landed in the `places` table**
 
@@ -1969,10 +1977,10 @@ Expected: a populated table with real OSM-derived rows.
 - [ ] **Step 10.5: Run the CLI tool end-to-end**
 
 ```bash
-ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app python -m dispatchzero.tools.discover_places --callsign smoketest_p3 --lat 41.4994 --lng -81.6954 --radius-m 1500"
+ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app python -m dispatchzero.tools.discover_places --callsign smoketest_p3 --lat 47.6588 --lng -117.4260 --radius-m 1500"
 ```
 
-Expected: prints 1+ places and a count.
+Expected: prints multiple Spokane places with category labels and a count.
 
 - [ ] **Step 10.6: Clean up the smoke-test user**
 
