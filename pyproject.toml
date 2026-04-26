@@ -15,6 +15,7 @@ dependencies = [
     "redis>=5.2",
     "argon2-cffi>=23.1",
     "itsdangerous>=2.2",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
@@ -23,6 +24,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx>=0.28",
     "ruff>=0.8",
+    "respx>=0.22",
 ]
 
 [build-system]
