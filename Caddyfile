@@ -2,7 +2,7 @@
     email trevor@johnsonfarms.us
 }
 
-dispatchzero.johnsonfarms.us {
+dispatchzero.ataary.com {
     encode gzip zstd
     reverse_proxy app:8000
 

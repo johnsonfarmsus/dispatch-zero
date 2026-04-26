@@ -25,5 +25,5 @@ ssh "${VPS_HOST}" "cd ${REMOTE_DIR} && docker compose -f docker-compose.yml -f d
 
 echo "[4/4] healthcheck"
 sleep 5
-curl -fsS https://dispatchzero.johnsonfarms.us/healthz && echo
+curl -fsS https://dispatchzero.ataary.com/healthz && echo
 echo "deploy ok"

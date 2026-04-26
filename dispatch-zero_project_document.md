@@ -45,7 +45,7 @@ The product should feel:
 
 **Product name:** Dispatch Zero
 
-**Working URL:** `dispatchzero.johnsonfarms.us`
+**Working URL:** `dispatchzero.ataary.com`
 
 The subdomain points to VPS 2 (`89.167.39.152`). Caddy handles SSL automatically via Let's Encrypt. No new domain registration is required for launch.
 
@@ -810,7 +810,7 @@ A place is automatically flagged for review when it receives **3 or more negativ
 ### Fully Decided
 
 - Product name: Dispatch Zero
-- Working URL: dispatchzero.johnsonfarms.us
+- Working URL: dispatchzero.ataary.com
 - Handler name: Zero (single unified character — no separate persona names; tone and voice vary per style)
 - Handler mystery: preserved, no biography, obscured avatars
 - Python + FastAPI
