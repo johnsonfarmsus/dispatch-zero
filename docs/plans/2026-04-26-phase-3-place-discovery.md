@@ -1927,7 +1927,7 @@ Expected: `0003 (head)`.
 
 - [ ] **Step 10.3: Curl a real signup → /places/nearby flow against prod**
 
-Smoke-test coordinate: **downtown Spokane, WA — Riverfront Park** (`47.6588, -117.4260`). A direct Overpass query against this point with a 2 km radius (run 2026-04-26 to validate the plan) returned 104 raw OSM elements, normalizing to ~68 named places across all five categories. Sample of what we expect Task 10 to surface (top items per category):
+Smoke-test coordinate: **the Garbage Goat, Spokane Riverfront Park** (`47.6605131, -117.4197590`). The Garbage Goat itself (OSM node `10558408202`, `tourism=artwork`) sits on the Centennial Trail in Riverpoint Village and will appear in the result set as a sculpture. A direct Overpass query around this point with a 2 km radius (run 2026-04-26 to validate the plan) returned ~104 raw OSM elements normalizing to ~68 named places across all five categories. Sample of what Task 10 will surface (top items per category):
 
 | Category | Sample names found in 2 km of (47.6588, -117.4260) |
 |---|---|
@@ -1946,16 +1946,16 @@ curl -sS -c "$COOKIES" -X POST https://dispatchzero.ataary.com/auth/signup \
   -d '{"callsign":"smoketest_p3","password":"smoketest-very-long-password","adventure_style":"agency"}'
 echo
 
-# Discover nearby — Spokane Riverfront Park
+# Discover nearby — centered on the Garbage Goat, Spokane Riverfront Park
 curl -sS -b "$COOKIES" \
-  "https://dispatchzero.ataary.com/places/nearby?lat=47.6588&lng=-117.4260&radius_m=2000&limit=10" \
+  "https://dispatchzero.ataary.com/places/nearby?lat=47.6605131&lng=-117.4197590&radius_m=2000&limit=10" \
   | python3 -m json.tool
 echo
 
 # Cache hit verification — second call should be much faster
 echo "--- second call (warm cache) ---"
 time curl -sS -b "$COOKIES" \
-  "https://dispatchzero.ataary.com/places/nearby?lat=47.6588&lng=-117.4260&radius_m=2000&limit=10" \
+  "https://dispatchzero.ataary.com/places/nearby?lat=47.6605131&lng=-117.4197590&radius_m=2000&limit=10" \
   > /dev/null
 
 rm -f "$COOKIES"
@@ -1963,7 +1963,7 @@ rm -f "$COOKIES"
 
 Expected:
 - Signup returns the user JSON.
-- /places/nearby returns up to 10 ranked places drawn from the ~68-place Spokane downtown pool. Murals and sculptures should rank near the top of the list (category bonus).
+- /places/nearby returns up to 10 ranked places drawn from the ~68-place Spokane downtown pool. **The Garbage Goat itself should appear** as a sculpture; murals and sculptures should rank near the top of the list (category bonus).
 - Second call is sub-200ms (Overpass response cached for 7 days; Wikidata enrichment cached for 30 days).
 
 - [ ] **Step 10.4: Inspect what landed in the `places` table**
@@ -1977,7 +1977,7 @@ Expected: a populated table with real OSM-derived rows.
 - [ ] **Step 10.5: Run the CLI tool end-to-end**
 
 ```bash
-ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app python -m dispatchzero.tools.discover_places --callsign smoketest_p3 --lat 47.6588 --lng -117.4260 --radius-m 1500"
+ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app python -m dispatchzero.tools.discover_places --callsign smoketest_p3 --lat 47.6605131 --lng -117.4197590 --radius-m 1500"
 ```
 
 Expected: prints multiple Spokane places with category labels and a count.
