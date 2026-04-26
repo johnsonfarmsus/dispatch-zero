@@ -12,32 +12,39 @@ assert os.environ.get("DATABASE_URL"), "DATABASE_URL must be set (run via docker
 assert os.environ.get("REDIS_URL"), "REDIS_URL must be set (run via docker-compose.test.yml)"
 assert os.environ.get("SESSION_SECRET"), "SESSION_SECRET must be set"
 
+from dispatchzero.db import get_session  # noqa: E402
 from dispatchzero.main import app  # noqa: E402
 from dispatchzero.models import Base  # noqa: E402
-
-_schema_initialized = False
-
-
-async def _ensure_schema(engine) -> None:
-    """Create schema once per pytest invocation; subsequent tests skip."""
-    global _schema_initialized
-    if _schema_initialized:
-        return
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    _schema_initialized = True
 
 
 @pytest_asyncio.fixture
 async def db_session():
-    """Function-scoped engine + session — own loop per test, no cross-loop drama."""
+    """
+    Function-scoped engine + session, with FastAPI dependency override so the app
+    uses the SAME engine. Resets schema per test for isolation. NullPool avoids any
+    cross-loop pooling issues.
+    """
     engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
-    await _ensure_schema(engine)
-    Session = async_sessionmaker(engine, expire_on_commit=False)
-    async with Session() as session:
+
+    # Fresh schema per test — drops everything, recreates from current models.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+    # Override the FastAPI dep so any request handled during this test uses our engine.
+    async def _override_get_session():
+        async with SessionLocal() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = _override_get_session
+
+    # Hand a session to the test for direct DB inspection if it wants one.
+    async with SessionLocal() as session:
         yield session
-        await session.rollback()
+
+    app.dependency_overrides.clear()
     await engine.dispose()
 
 
