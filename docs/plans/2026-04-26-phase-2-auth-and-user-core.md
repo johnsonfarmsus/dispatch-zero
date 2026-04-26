@@ -299,102 +299,116 @@ git commit -m "feat: add User model and 0002 migration"
 
 ---
 
-### Task 3: Test DB fixtures (db + redis)
+### Task 3: On-VPS test infrastructure (multi-stage Dockerfile + test service)
+
+> **Workflow shift (decided 2026-04-26):** All dev — including running tests — happens on VPS 2. The laptop is editor + git + rsync only. Tests run inside a container on the docker network, hitting `db` and `redis` by service DNS. No host port exposure on the VPS. No local Python or Postgres needed.
 
 **Files:**
-- Modify: `tests/conftest.py`
-- Create: `tests/.env.test` (NOT committed; or use env vars in conftest)
+- Modify: `Dockerfile` (multi-stage: `prod` and `test`)
+- Create: `docker-compose.test.yml`
+- Create: `deploy/test.sh` (rsync + ssh + `docker compose run --rm test`)
+- Modify: `tests/conftest.py` (env vars come from container env; no `.env.test`)
+- Create: `tests/test_db_smoke.py`
 
-- [ ] **Step 3.1: Decide test DB strategy and document it**
+- [ ] **Step 3.1: Convert Dockerfile to multi-stage with `prod` and `test` targets**
 
-Tests need a real Postgres + Redis to exercise the full auth surface. Two clean options:
+Replace `Dockerfile` entirely with:
 
-- **Option A (recommended):** Run Postgres + Redis on **VPS 2** (already there). Tests run from local laptop pointing at exposed-via-SSH-tunnel ports. Fast on a stable network.
-- **Option B:** Skip integration tests in CI; only run them on a deploy preview against the real stack.
+```dockerfile
+# syntax=docker/dockerfile:1.7
+FROM python:3.12-slim AS base
 
-For Phase 2 we go with **Option A** but the SSH tunnel is opened manually before running tests:
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
 
-```bash
-# In a separate shell, open tunnels (leave running while iterating):
-ssh -N -L 15432:localhost:5432 -L 16379:localhost:6379 root@89.167.39.152 \
-  "docker compose -f /opt/dispatchzero/docker-compose.yml \
-   -f /opt/dispatchzero/docker-compose.prod.yml exec -T db true" \
-  &  # background
-# Or simpler — exec into the VPS and forward:
-ssh -N -L 15432:127.0.0.1:5432 -L 16379:127.0.0.1:6379 root@89.167.39.152
+COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+COPY src ./src
+
+# ----- prod stage (default; lean, no dev deps, no tests) -----
+FROM base AS prod
+RUN uv sync --frozen --no-dev
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
+ENV PATH="/app/.venv/bin:$PATH"
+EXPOSE 8000
+CMD ["uvicorn", "dispatchzero.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# ----- test stage (includes dev deps + tests/) -----
+FROM base AS test
+RUN uv sync --frozen
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
+COPY tests ./tests
+ENV PATH="/app/.venv/bin:$PATH"
+CMD ["pytest", "-v"]
 ```
 
-Wait — DB and Redis aren't exposed on the host network in prod (we set `ports: !reset []`). So SSH port-forwarding to `localhost:5432` on the VPS won't work — the container ports aren't bound to host loopback. We have three sub-options:
+- [ ] **Step 3.2: Update `docker-compose.yml` to target the `prod` stage by default**
 
-  - **3a. Add a host-loopback exposure on the VPS for testing only.** Edit `docker-compose.prod.yml` to expose `127.0.0.1:5432` and `127.0.0.1:6379`. Slight increase in attack surface, but only on loopback.
-  - **3b. Use `docker compose exec` to tunnel directly into containers.** More fragile.
-  - **3c. Run a separate test stack locally.** Trevor doesn't want local Docker.
-
-Pick **3a**. It's the least friction, only loopback-bound.
-
-- [ ] **Step 3.2: Modify `docker-compose.prod.yml` to expose DB and Redis on VPS loopback**
-
-In `docker-compose.prod.yml`, replace the `db:` and `redis:` sections:
+In `docker-compose.yml`, change the `app:` block's `build:` line:
 
 ```yaml
-  db:
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:5432:5432"   # loopback-only on VPS, accessible via SSH tunnel for tests
-
-  redis:
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:6379:6379"   # loopback-only on VPS, accessible via SSH tunnel for tests
+  app:
+    build:
+      context: .
+      target: prod
 ```
 
-(Keep `restart: unless-stopped` on caddy and app as before.)
+(Equivalent default; explicit is clearer.)
 
-Deploy this change before running Phase 2 integration tests:
+- [ ] **Step 3.3: Create `docker-compose.test.yml`**
 
-```bash
-./deploy/deploy.sh
+Write to `docker-compose.test.yml`:
+
+```yaml
+services:
+  test:
+    build:
+      context: .
+      target: test
+    env_file: .env
+    environment:
+      # Override DB to use a dedicated test database on the same Postgres instance
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/dispatchzero_test
+      # Use Redis DB index 15 for tests to keep prod-side data untouched
+      REDIS_URL: redis://redis:6379/15
+      APP_ENV: test
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 ```
 
-- [ ] **Step 3.3: Create a dedicated test database on VPS 2**
+- [ ] **Step 3.4: Create the `dispatchzero_test` database on VPS 2 (one-time)**
 
 ```bash
 ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db psql -U dispatchzero -d postgres -c 'CREATE DATABASE dispatchzero_test;'"
 ssh root@89.167.39.152 "cd /opt/dispatchzero && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db psql -U dispatchzero -d dispatchzero_test -c 'CREATE EXTENSION IF NOT EXISTS postgis;'"
 ```
 
-- [ ] **Step 3.4: Open a persistent SSH tunnel for test runs**
-
-In a separate shell (leave open while iterating on tests):
-
-```bash
-ssh -N -L 15432:127.0.0.1:5432 -L 16379:127.0.0.1:6379 root@89.167.39.152
-```
-
-(Local ports 15432 / 16379 are intentionally non-default to avoid colliding with anything.)
-
-- [ ] **Step 3.5: Extend conftest.py with DB and Redis fixtures**
+- [ ] **Step 3.5: Update `tests/conftest.py` for the on-VPS test environment**
 
 Replace `tests/conftest.py` entirely with:
 
 ```python
-import asyncio
 import os
-import uuid
 
-import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-# Set env BEFORE importing anything that reads settings
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+asyncpg://dispatchzero:CHANGE_ME@127.0.0.1:15432/dispatchzero_test",
-)
-os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:16379/1")
-os.environ.setdefault("SESSION_SECRET", "x" * 32)
+# In the test container, env vars are provided by docker-compose.test.yml.
+# We don't set defaults here — if the env isn't set, the test should fail loudly.
+assert os.environ.get("DATABASE_URL"), "DATABASE_URL must be set (run via docker-compose.test.yml)"
+assert os.environ.get("REDIS_URL"), "REDIS_URL must be set (run via docker-compose.test.yml)"
+assert os.environ.get("SESSION_SECRET"), "SESSION_SECRET must be set"
 
 from dispatchzero.main import app  # noqa: E402
 from dispatchzero.models import Base  # noqa: E402
@@ -434,71 +448,13 @@ async def client():
         yield ac
 ```
 
-(Replace `CHANGE_ME` in `DATABASE_URL` with the real Postgres password from VPS 2's `/opt/dispatchzero/.env`. To avoid checking the password into the repo, expect testers to set `DATABASE_URL` env var explicitly via a local `.env.test` they don't commit; the `setdefault` above is for guidance.)
+- [ ] **Step 3.6: Add `pytest-asyncio` and `aioredis` as dev deps if not already present, plus update lockfile**
 
-Actually, a cleaner approach — use a local `.env.test` (gitignored) and have conftest load it:
+Verify `pyproject.toml`'s dev group already has `pytest-asyncio` and that the main deps include `redis` (it does — added in Phase 1). No new packages required.
 
-Update conftest.py top:
+- [ ] **Step 3.7: Write the smoke test**
 
-```python
-from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent / ".env.test", override=False)
-os.environ.setdefault("SESSION_SECRET", "x" * 32)
-```
-
-And add `python-dotenv` to dev deps in pyproject.toml. Then create a local `.env.test` (NOT committed — already gitignored via `.env*` pattern? Check: our gitignore has `.env` only. Add `.env*` to be safe.)
-
-- [ ] **Step 3.6: Update gitignore for .env* files**
-
-In `.gitignore`, replace:
-
-```
-.env
-```
-
-with:
-
-```
-.env
-.env.*
-```
-
-- [ ] **Step 3.7: Add python-dotenv as dev dep**
-
-In `pyproject.toml`:
-
-```toml
-[dependency-groups]
-dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "httpx>=0.28",
-    "ruff>=0.8",
-    "python-dotenv>=1.0",
-]
-```
-
-```bash
-uv sync
-```
-
-- [ ] **Step 3.8: Create local `.env.test` (NOT committed)**
-
-```bash
-cat > .env.test <<'EOF'
-DATABASE_URL=postgresql+asyncpg://dispatchzero:PASTE_PG_PASSWORD@127.0.0.1:15432/dispatchzero_test
-REDIS_URL=redis://127.0.0.1:16379/1
-SESSION_SECRET=test-only-secret-padded-to-32-chars
-EOF
-```
-
-Replace `PASTE_PG_PASSWORD` with the prod Postgres password from VPS 2's `/opt/dispatchzero/.env` (read it via `ssh root@89.167.39.152 'grep POSTGRES_PASSWORD /opt/dispatchzero/.env'`).
-
-- [ ] **Step 3.9: Verify the test fixtures work with a smoke test**
-
-Add to `tests/test_db_smoke.py`:
+Write to `tests/test_db_smoke.py`:
 
 ```python
 import pytest
@@ -517,17 +473,50 @@ async def test_redis_fixture_can_set_and_get(redis_client):
     assert await redis_client.get("smoke") == "ok"
 ```
 
+- [ ] **Step 3.8: Create `deploy/test.sh`**
+
+Write to `deploy/test.sh`:
+
 ```bash
-uv run pytest tests/test_db_smoke.py -v
+#!/usr/bin/env bash
+set -euo pipefail
+
+VPS_HOST="root@89.167.39.152"
+REMOTE_DIR="/opt/dispatchzero"
+
+echo "[1/2] syncing source (including tests) to ${VPS_HOST}:${REMOTE_DIR}"
+rsync -az --delete \
+  --exclude '.venv' \
+  --exclude '__pycache__' \
+  --exclude '.pytest_cache' \
+  --exclude '.ruff_cache' \
+  --exclude '.git' \
+  --exclude '.env' \
+  --exclude '.DS_Store' \
+  --exclude '.claude' \
+  ./ "${VPS_HOST}:${REMOTE_DIR}/"
+
+echo "[2/2] running tests on VPS via docker compose run"
+ssh "${VPS_HOST}" "cd ${REMOTE_DIR} && docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.test.yml run --rm --build test"
 ```
 
-Expected: 2 passed (with SSH tunnel running). If "Connection refused", the tunnel isn't open.
+```bash
+chmod +x deploy/test.sh
+```
+
+- [ ] **Step 3.9: Run the smoke tests**
+
+```bash
+./deploy/test.sh
+```
+
+Expected: 2 passed (`test_db_fixture_can_query`, `test_redis_fixture_can_set_and_get`).
 
 - [ ] **Step 3.10: Commit**
 
 ```bash
-git add .gitignore pyproject.toml uv.lock tests/conftest.py tests/test_db_smoke.py docker-compose.prod.yml
-git commit -m "feat: test fixtures for db and redis via VPS SSH tunnel"
+git add Dockerfile docker-compose.yml docker-compose.test.yml deploy/test.sh tests/conftest.py tests/test_db_smoke.py
+git commit -m "feat: on-VPS test infrastructure (multi-stage Dockerfile + test service + test.sh)"
 ```
 
 ---
