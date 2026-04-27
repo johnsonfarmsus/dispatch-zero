@@ -2,6 +2,7 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
+import { getFreshFix, clearMissionCache, clearLastDebrief } from "../flow.js";
 
 const STYLE_LABEL = {
   pulp:   "PULP // THE ARCHIVE",
@@ -20,7 +21,11 @@ export async function home() {
   setUser(user);
 
   const logoutLink = el("a", { href: "#", class: "muted" }, "Stand down");
-  const requestBtn = el("button", { class: "primary", disabled: true }, "Request Dispatch");
+  const requestBtn = el("button", { class: "primary" }, "Request Dispatch");
+  const requestStatus = el("div", {
+    class: "muted mono",
+    style: { textAlign: "center", fontSize: "var(--t-xs)" },
+  }, "");
 
   const screen = el("div", { class: "screen" },
     el("div", { class: "header" },
@@ -66,10 +71,7 @@ export async function home() {
     ),
     el("div", { class: "actions" },
       requestBtn,
-      el("div", {
-        class: "muted mono",
-        style: { textAlign: "center", fontSize: "var(--t-xs)" },
-      }, "Mission flow lands in Phase 7."),
+      requestStatus,
     ),
   );
 
@@ -78,6 +80,41 @@ export async function home() {
     await api.post("/auth/logout", {});
     clearUser();
     await navigate("/", { replace: true });
+  });
+
+  requestBtn.addEventListener("click", async () => {
+    requestBtn.disabled = true;
+    requestStatus.style.color = "var(--text-muted)";
+    requestStatus.textContent = "Acquiring fix…";
+    try {
+      const fix = await getFreshFix({ maxAgeMs: 30000 });
+      requestStatus.textContent = "Acquiring target…";
+      const r = await api.post("/missions/request", {
+        lat: fix.lat,
+        lng: fix.lng,
+        radius_m: 2000,
+      });
+      if (r.ok) {
+        clearMissionCache();
+        clearLastDebrief();
+        await navigate(`/mission/${r.data.id}/dispatch`);
+        return;
+      }
+      throw new Error(r.data?.detail || "Dispatch line is unreliable.");
+    } catch (e) {
+      requestStatus.style.color = "var(--danger)";
+      const msg = e.message || "Dispatch failed.";
+      if (e.code === e.PERMISSION_DENIED || /denied|geolocation/i.test(msg)) {
+        requestStatus.textContent = "Location permission required, agent.";
+      } else if (e.status === 404) {
+        requestStatus.textContent = "No eligible targets within 2 km.";
+      } else if (e.status === 503) {
+        requestStatus.textContent = "Dispatch line is unreliable. Try again.";
+      } else {
+        requestStatus.textContent = msg;
+      }
+      requestBtn.disabled = false;
+    }
   });
 
   return screen;

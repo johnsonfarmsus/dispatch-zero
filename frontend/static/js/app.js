@@ -7,6 +7,13 @@ import { signup } from "./screens/signup.js";
 import { login } from "./screens/login.js";
 import { home } from "./screens/home.js";
 import { stylePicker } from "./screens/style-picker.js";
+import { dispatch as missionDispatch } from "./screens/mission/dispatch.js";
+import { brief as missionBrief } from "./screens/mission/brief.js";
+import { objective as missionObjective } from "./screens/mission/objective.js";
+import { transit as missionTransit } from "./screens/mission/transit.js";
+import { capture as missionCapture } from "./screens/mission/capture.js";
+import { debrief as missionDebrief } from "./screens/mission/debrief.js";
+import { rate as missionRate } from "./screens/mission/rate.js";
 
 const root = document.getElementById("app");
 
@@ -36,6 +43,13 @@ async function bootstrap() {
   defineRoute("/signup", () => signup());
   defineRoute("/login", () => login());
   defineRoute("/style", () => stylePicker());
+  defineRoute("/mission/:id/dispatch", (p) => missionDispatch(p));
+  defineRoute("/mission/:id/brief", (p) => missionBrief(p));
+  defineRoute("/mission/:id/objective", (p) => missionObjective(p));
+  defineRoute("/mission/:id/transit", (p) => missionTransit(p));
+  defineRoute("/mission/:id/capture", (p) => missionCapture(p));
+  defineRoute("/mission/:id/debrief", (p) => missionDebrief(p));
+  defineRoute("/completions/:id/rate", (p) => missionRate(p));
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
   init(root);
