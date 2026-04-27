@@ -44,7 +44,10 @@ async def check_and_increment(
 
     async with redis.pipeline(transaction=True) as pipe:
         pipe.incr(key)
-        pipe.expire(key, window_seconds)
+        # NX: only stamp the TTL on first INCR. Without it, plain EXPIRE
+        # resets the TTL on every call, leaving stale bucket keys alive
+        # longer than necessary. Matches LoginRateLimiter's pattern.
+        pipe.expire(key, window_seconds, nx=True)
         results = await pipe.execute()
 
     count = int(results[0])

@@ -148,3 +148,4 @@ async def test_signup_rate_limited_per_ip(client, db_session, redis_client, monk
         "adventure_style": "agency",
     })
     assert r.status_code == 429
+    assert "Retry-After" in r.headers

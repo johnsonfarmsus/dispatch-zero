@@ -181,3 +181,25 @@ async def test_generate_overrides_style_when_provided(
         )
     assert r.status_code == 200
     assert r.json()["adventure_style"] == "pulp"
+
+
+@pytest.mark.asyncio
+async def test_generate_rate_limit_kicks_in(
+    client, db_session, redis_client, monkeypatch
+):
+    """After hitting the cap, /missions/generate returns 429 with Retry-After."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("RATE_LIMIT_MISSION_GENERATE_PER_DAY", "2")
+    await client.post("/auth/signup", json=SIGNUP)
+    place = await _make_place(db_session)
+
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ollama_payload())
+        )
+        for _ in range(2):
+            r = await client.post("/missions/generate", json={"place_id": str(place.id)})
+            assert r.status_code == 200, r.text
+        r = await client.post("/missions/generate", json={"place_id": str(place.id)})
+    assert r.status_code == 429, r.text
+    assert "Retry-After" in r.headers
