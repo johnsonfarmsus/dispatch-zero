@@ -25,15 +25,21 @@ async def discover_nearby(
     radius_m: int,
     limit: int,
     categories: list[PlaceCategory] | None = None,
+    broad: bool = False,
 ) -> list[dict[str, Any]]:
-    """Find, persist, score, filter, and return nearby places for `user`."""
+    """Find, persist, score, filter, and return nearby places for `user`.
+
+    `broad=True` widens the OSM tag set to include parks, peaks, places of
+    worship, fountains, towers, and other named features. Used as a fallback
+    tier when strict filters return nothing eligible.
+    """
     cats = categories or list(PlaceCategory)
 
     overpass = OverpassClient(redis)
     wikidata = WikidataClient(redis)
     try:
         raw_places = await overpass.query_nearby(
-            lat=lat, lng=lng, radius_m=radius_m, categories=cats
+            lat=lat, lng=lng, radius_m=radius_m, categories=cats, broad=broad,
         )
         named = [p for p in raw_places if p.name]
         stored: list[Place] = []

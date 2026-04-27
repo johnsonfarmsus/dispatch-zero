@@ -33,6 +33,38 @@ _CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
     PlaceCategory.VIEWPOINT: ['["tourism"="viewpoint"]'],
 }
 
+# Broader fallback filters — used when the strict set returns no eligible results.
+# These pull in named parks, places of worship, peaks, fountains, towers, etc.
+# Quality bar drops; coverage rises.
+_BROAD_CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
+    PlaceCategory.MURAL: [],  # nothing reasonable to add here
+    PlaceCategory.SCULPTURE: [
+        '["amenity"="fountain"]["name"]',
+        '["man_made"="sculpture"]["name"]',
+    ],
+    PlaceCategory.MEMORIAL: [
+        '["historic"="wayside_cross"]["name"]',
+        '["historic"="wayside_shrine"]["name"]',
+    ],
+    PlaceCategory.HISTORIC: [
+        '["amenity"="place_of_worship"]["name"]',
+        '["historic"="castle"]["name"]',
+        '["historic"="manor"]["name"]',
+        '["historic"="fort"]["name"]',
+        '["historic"="ship"]["name"]',
+        '["man_made"="lighthouse"]["name"]',
+        '["man_made"="watermill"]["name"]',
+        '["man_made"="windmill"]["name"]',
+        '["man_made"="tower"]["name"]',
+    ],
+    PlaceCategory.VIEWPOINT: [
+        '["natural"="peak"]["name"]',
+        '["natural"="waterfall"]["name"]',
+        '["leisure"="park"]["name"]',
+        '["tourism"="attraction"]["name"]',
+    ],
+}
+
 
 @dataclass(frozen=True)
 class OverpassPlace:
@@ -51,10 +83,14 @@ def build_query(
     lng: float,
     radius_m: int,
     categories: Iterable[PlaceCategory],
+    broad: bool = False,
 ) -> str:
     parts: list[str] = []
     for cat in categories:
-        for filt in _CATEGORY_FILTERS[cat]:
+        filters = list(_CATEGORY_FILTERS[cat])
+        if broad:
+            filters.extend(_BROAD_CATEGORY_FILTERS.get(cat, []))
+        for filt in filters:
             parts.append(f"node{filt}(around:{radius_m},{lat},{lng});")
             parts.append(f"way{filt}(around:{radius_m},{lat},{lng});")
             parts.append(f"relation{filt}(around:{radius_m},{lat},{lng});")
@@ -62,13 +98,24 @@ def build_query(
     return f"[out:json][timeout:25];{body}out center tags;"
 
 
-def _cache_key(lat: float, lng: float, radius_m: int, categories: list[PlaceCategory]) -> str:
+def _cache_key(
+    lat: float, lng: float, radius_m: int,
+    categories: list[PlaceCategory], broad: bool,
+) -> str:
     cat_hash = hashlib.sha1(",".join(sorted(c.value for c in categories)).encode()).hexdigest()[:8]
-    return f"overpass:{lat:.3f}:{lng:.3f}:{radius_m}:{cat_hash}"
+    suffix = "b" if broad else "s"
+    return f"overpass:{lat:.3f}:{lng:.3f}:{radius_m}:{cat_hash}:{suffix}"
 
 
 def _classify(tags: dict) -> PlaceCategory | None:
-    """Map an OSM element's tags to one of our categories. First match wins."""
+    """Map an OSM element's tags to one of our categories. First match wins.
+
+    Includes both strict (artwork/historic core) and broad (parks, peaks,
+    places of worship, fountains, towers, etc.) tag patterns. The query layer
+    decides which set of OSM features get fetched; classify covers everything
+    that might come back.
+    """
+    # ----- Strict patterns first (more specific) -----
     artwork_type = tags.get("artwork_type")
     if artwork_type == "mural":
         return PlaceCategory.MURAL
@@ -79,11 +126,33 @@ def _classify(tags: dict) -> PlaceCategory | None:
         return PlaceCategory.MEMORIAL
     if historic in ("building", "ruins", "archaeological_site"):
         return PlaceCategory.HISTORIC
+    if historic in ("wayside_cross", "wayside_shrine"):
+        return PlaceCategory.MEMORIAL
+    if historic in ("castle", "manor", "fort", "ship"):
+        return PlaceCategory.HISTORIC
     if tags.get("tourism") == "viewpoint":
         return PlaceCategory.VIEWPOINT
     if tags.get("tourism") == "artwork":
-        # Generic artwork without a specific type — treat as sculpture by default
         return PlaceCategory.SCULPTURE
+
+    # ----- Broad patterns (only relevant when broad mode pulled them in) -----
+    amenity = tags.get("amenity")
+    if amenity == "fountain":
+        return PlaceCategory.SCULPTURE
+    if amenity == "place_of_worship":
+        return PlaceCategory.HISTORIC
+    man_made = tags.get("man_made")
+    if man_made == "sculpture":
+        return PlaceCategory.SCULPTURE
+    if man_made in ("lighthouse", "watermill", "windmill", "tower"):
+        return PlaceCategory.HISTORIC
+    natural = tags.get("natural")
+    if natural in ("peak", "waterfall"):
+        return PlaceCategory.VIEWPOINT
+    if tags.get("leisure") == "park":
+        return PlaceCategory.VIEWPOINT
+    if tags.get("tourism") == "attraction":
+        return PlaceCategory.VIEWPOINT
     return None
 
 
@@ -111,8 +180,9 @@ class OverpassClient:
         lng: float,
         radius_m: int,
         categories: list[PlaceCategory],
+        broad: bool = False,
     ) -> list[OverpassPlace]:
-        key = _cache_key(lat, lng, radius_m, categories)
+        key = _cache_key(lat, lng, radius_m, categories, broad)
         cached = await self._cache.get(key)
         if cached is not None:
             return [
@@ -128,7 +198,9 @@ class OverpassClient:
                 for item in cached
             ]
 
-        query = build_query(lat=lat, lng=lng, radius_m=radius_m, categories=categories)
+        query = build_query(
+            lat=lat, lng=lng, radius_m=radius_m, categories=categories, broad=broad,
+        )
         r = await self._http.post(_BASE_URL, data={"data": query})
         r.raise_for_status()
         data = r.json()

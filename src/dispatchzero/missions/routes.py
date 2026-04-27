@@ -119,6 +119,20 @@ async def generate(
     return await _mission_to_out(db, mission, place)
 
 
+# Tiered fallback for /missions/request — try increasingly permissive searches
+# until we find an eligible place. Each tier is (radius_m, broad_filters).
+# The user's `payload.radius_m` controls the FIRST tier only; subsequent tiers
+# always use a wider radius. This way a user-supplied 2km still gets the
+# graceful expansion when they're in a sparse area.
+_REQUEST_TIERS: list[tuple[int, bool]] = [
+    # (radius_m, broad)
+    # Tier 0 is dynamic — uses payload.radius_m
+    (5000, False),  # Tier 1: 5km strict
+    (5000, True),   # Tier 2: 5km broad
+    (10000, True),  # Tier 3: 10km broad
+]
+
+
 @router.post("/request", response_model=MissionOut)
 async def request_mission(
     payload: MissionRequestIn,
@@ -126,11 +140,28 @@ async def request_mission(
     db: Annotated[AsyncSession, Depends(get_session)],
     redis: Annotated[aioredis.Redis, Depends(_get_redis)],
 ) -> MissionOut:
-    """Combined: discover nearby places, pick top, generate mission."""
-    places = await discover_nearby(
-        db=db, redis=redis, user=user,
-        lat=payload.lat, lng=payload.lng, radius_m=payload.radius_m, limit=1,
-    )
+    """Combined: discover nearby places, pick top, generate mission.
+
+    Tiered fallback: caller's radius (strict) → 5km strict → 5km broad → 10km broad.
+    First tier with an eligible place wins. Silent escalation — caller gets a
+    single mission response regardless of which tier succeeded.
+    """
+    tiers = [(payload.radius_m, False)] + _REQUEST_TIERS
+    seen_radii: set[tuple[int, bool]] = set()
+    places: list = []
+    for radius_m, broad in tiers:
+        key = (radius_m, broad)
+        if key in seen_radii:
+            continue  # skip duplicates (e.g. payload.radius_m=5000 + tier 1)
+        seen_radii.add(key)
+        places = await discover_nearby(
+            db=db, redis=redis, user=user,
+            lat=payload.lat, lng=payload.lng,
+            radius_m=radius_m, limit=1, broad=broad,
+        )
+        if places:
+            break
+
     if not places:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no eligible places nearby")
     place_id = places[0]["id"]

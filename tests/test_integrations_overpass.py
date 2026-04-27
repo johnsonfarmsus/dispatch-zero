@@ -58,6 +58,62 @@ async def test_query_returns_normalized_places(redis_client):
 
 
 @pytest.mark.asyncio
+async def test_broad_mode_returns_parks_and_peaks(redis_client):
+    fake_response = {
+        "elements": [
+            {
+                "type": "node", "id": 1, "lat": 47.6, "lon": -117.4,
+                "tags": {"name": "Riverside Park", "leisure": "park"},
+            },
+            {
+                "type": "node", "id": 2, "lat": 47.7, "lon": -117.3,
+                "tags": {"name": "Mount Spokane", "natural": "peak"},
+            },
+            {
+                "type": "node", "id": 3, "lat": 47.65, "lon": -117.42,
+                "tags": {"name": "First Presbyterian", "amenity": "place_of_worship"},
+            },
+        ]
+    }
+    client = OverpassClient(redis_client)
+    with respx.mock:
+        respx.post("https://overpass-api.de/api/interpreter").mock(
+            return_value=httpx.Response(200, json=fake_response)
+        )
+        results = await client.query_nearby(
+            lat=47.6605, lng=-117.4198, radius_m=5000,
+            categories=list(PlaceCategory), broad=True,
+        )
+    by_cat = {r.category: r for r in results}
+    assert PlaceCategory.VIEWPOINT in by_cat  # park OR peak
+    assert PlaceCategory.HISTORIC in by_cat  # place_of_worship
+    # All three should be classified
+    assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_strict_mode_excludes_broad_features(redis_client):
+    # Same fake response — but with broad=False, classify still maps these
+    # post-hoc, BUT the query itself wouldn't have asked for them. To test
+    # the QUERY level, we check build_query directly:
+    from dispatchzero.integrations.overpass import build_query
+    strict_q = build_query(
+        lat=47.6, lng=-117.4, radius_m=2000,
+        categories=list(PlaceCategory), broad=False,
+    )
+    broad_q = build_query(
+        lat=47.6, lng=-117.4, radius_m=2000,
+        categories=list(PlaceCategory), broad=True,
+    )
+    assert "leisure" not in strict_q
+    assert "place_of_worship" not in strict_q
+    assert "natural" not in strict_q or "natural"+"=peak" not in strict_q
+    assert "leisure" in broad_q
+    assert "place_of_worship" in broad_q
+    assert 'natural"="peak' in broad_q
+
+
+@pytest.mark.asyncio
 async def test_query_caches_response(redis_client):
     client = OverpassClient(redis_client)
     with respx.mock:
