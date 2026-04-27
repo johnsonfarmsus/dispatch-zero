@@ -120,16 +120,20 @@ async def generate(
 
 
 # Tiered fallback for /missions/request — try increasingly permissive searches
-# until we find an eligible place. Each tier is (radius_m, broad_filters).
-# The user's `payload.radius_m` controls the FIRST tier only; subsequent tiers
-# always use a wider radius. This way a user-supplied 2km still gets the
-# graceful expansion when they're in a sparse area.
-_REQUEST_TIERS: list[tuple[int, bool]] = [
-    # (radius_m, broad)
-    # Tier 0 is dynamic — uses payload.radius_m
-    (5000, False),  # Tier 1: 5km strict
-    (5000, True),   # Tier 2: 5km broad
-    (10000, True),  # Tier 3: 10km broad
+# until we find an eligible place. Each tier is (radius_m, source, broad).
+# Tier 0 uses caller-supplied radius. Tiers 1-3 escalate scope: more radius,
+# then broader OSM filters, then a different data source (Wikipedia geosearch).
+#
+# A tier "fails" and we move to the next either when:
+#   1) the source returns no places at all, OR
+#   2) every place returned has been completed by this user in the last 90 days
+# (`discover_nearby` filters out completed places, so 0 returned = either case)
+_REQUEST_TIERS: list[tuple[int, str, bool]] = [
+    # (radius_m, source, broad)
+    # Tier 0 is dynamic — uses payload.radius_m with overpass+strict
+    (5000, "overpass", False),   # Tier 1: 5km strict OSM
+    (5000, "overpass", True),    # Tier 2: 5km broad OSM (parks, peaks, churches, etc)
+    (5000, "wikipedia", False),  # Tier 3: 5km Wikipedia geosearch (global coverage)
 ]
 
 
@@ -142,22 +146,23 @@ async def request_mission(
 ) -> MissionOut:
     """Combined: discover nearby places, pick top, generate mission.
 
-    Tiered fallback: caller's radius (strict) → 5km strict → 5km broad → 10km broad.
-    First tier with an eligible place wins. Silent escalation — caller gets a
-    single mission response regardless of which tier succeeded.
+    Tiered fallback: caller's radius (strict OSM) → 5km strict OSM → 5km broad
+    OSM → 5km Wikipedia geosearch. First tier with an eligible (named, not
+    recently completed by this user) place wins. Silent escalation — caller
+    gets a single mission response regardless of which tier succeeded.
     """
-    tiers = [(payload.radius_m, False)] + _REQUEST_TIERS
-    seen_radii: set[tuple[int, bool]] = set()
+    tiers = [(payload.radius_m, "overpass", False)] + _REQUEST_TIERS
+    seen: set[tuple[int, str, bool]] = set()
     places: list = []
-    for radius_m, broad in tiers:
-        key = (radius_m, broad)
-        if key in seen_radii:
-            continue  # skip duplicates (e.g. payload.radius_m=5000 + tier 1)
-        seen_radii.add(key)
+    for radius_m, source, broad in tiers:
+        key = (radius_m, source, broad)
+        if key in seen:
+            continue
+        seen.add(key)
         places = await discover_nearby(
             db=db, redis=redis, user=user,
             lat=payload.lat, lng=payload.lng,
-            radius_m=radius_m, limit=1, broad=broad,
+            radius_m=radius_m, limit=1, broad=broad, source=source,
         )
         if places:
             break
