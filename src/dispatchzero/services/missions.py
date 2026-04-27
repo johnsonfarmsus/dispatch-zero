@@ -53,8 +53,6 @@ async def get_or_generate_mission(
             place_name=place.name or "an unnamed place",
             place_category=place.category,
             place_description=place.description,
-            place_lat=0.0,  # not shipped to LLM by default; place_name carries the narrative weight
-            place_lng=0.0,
         )
         try:
             raw = await client.chat(messages)

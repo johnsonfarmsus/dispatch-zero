@@ -9,8 +9,6 @@ def _ctx():
         place_name="Garbage Goat",
         place_category="sculpture",
         place_description=None,
-        place_lat=47.6605,
-        place_lng=-117.4198,
     )
 
 
@@ -56,11 +54,17 @@ def test_prompt_includes_description_when_present():
         place_name="Some Mural",
         place_category="mural",
         place_description="A 1974 fresco depicting the Spokane River.",
-        place_lat=47.6,
-        place_lng=-117.4,
     )
     text = "\n".join(m["content"] for m in msgs)
     assert "1974 fresco" in text
+
+
+def test_prompt_does_not_include_raw_coordinates():
+    # Phase 4 leaked "0.00000, 0.00000" into briefings; verify that's gone
+    msgs = build_mission_prompt(style="pulp", **_ctx())
+    text = "\n".join(m["content"] for m in msgs)
+    assert "0.00000" not in text
+    assert "coordinates" not in text.lower() or "do not invent" in text.lower()
 
 
 def test_unknown_style_raises():
@@ -71,6 +75,4 @@ def test_unknown_style_raises():
             place_name="X",
             place_category="mural",
             place_description=None,
-            place_lat=0,
-            place_lng=0,
         )

@@ -64,8 +64,6 @@ def build_mission_prompt(
     place_name: str,
     place_category: str,
     place_description: str | None,
-    place_lat: float,
-    place_lng: float,
 ) -> list[dict[str, str]]:
     """Return OpenAI-compatible messages list for the chat-completions endpoint."""
     if style not in _SYSTEM_BY_STYLE:
@@ -81,11 +79,12 @@ def build_mission_prompt(
 
     user = (
         f"Compose a mission for the operative known as {callsign}.\n\n"
-        f"Target: {place_name} (a {place_category}) at coordinates "
-        f"{place_lat:.5f}, {place_lng:.5f}.{description_line}\n\n"
+        f"Target: {place_name} (a {place_category}).{description_line}\n\n"
         f"The operative will travel to this location, photograph it as proof, and "
         f"return. Write a mission briefing in your voice. Make it feel real, slightly "
-        f"mysterious, and worth doing. Address {callsign} directly.\n\n"
+        f"mysterious, and worth doing. Address {callsign} directly. Do not invent "
+        f"specific coordinates, addresses, or grid references — they have the location "
+        f"on their map already.\n\n"
         f"Respond with the JSON object as specified."
     )
 
