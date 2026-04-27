@@ -39,38 +39,43 @@ Not in scope (would be over-engineering for a small-pool launch):
 
 ---
 
-## Repo layout deltas
+## Repo layout (actual, post-execution)
 
 ```
 dispatch-zero/
 ├── src/dispatchzero/
-│   ├── config.py                       # MODIFIED — add SENTRY_DSN, SHOW_BETA_BANNER, rate-limit caps
-│   ├── main.py                         # MODIFIED — Sentry init, banner endpoint
+│   ├── config.py                       # MODIFIED — rate-limit caps, ntfy_topic, show_beta_banner
+│   ├── main.py                         # MODIFIED — install_ntfy_handler, GET /config, --proxy-headers
 │   ├── auth/routes.py                  # MODIFIED — IP rate-limit on /auth/signup
-│   ├── missions/routes.py              # MODIFIED — per-user rate-limit on /missions/request and /missions/generate
-│   └── ratelimit.py                    # NEW — shared rate-limit helper (Redis-backed, reuses login pattern)
+│   ├── missions/routes.py              # MODIFIED — per-user rate-limit on /missions/request + /generate
+│   ├── ratelimit.py                    # NEW — shared rate-limit helper (Redis-backed)
+│   └── log_alerts.py                   # NEW — NtfyAlertHandler + install_ntfy_handler
 ├── tests/
-│   ├── test_ratelimit.py               # NEW — unit + integration coverage of the rate limiter
+│   ├── test_ratelimit.py               # MODIFIED — 4 new check_and_increment cases
 │   ├── test_missions_routes.py         # MODIFIED — assert rate-limit kicks in
-│   └── test_auth_routes.py             # MODIFIED — assert signup IP rate-limit
-├── frontend/static/js/screens/
-│   ├── splash.js                       # MODIFIED — render banner if /config returns SHOW_BETA_BANNER
-│   └── home.js                         # MODIFIED — same
+│   ├── test_missions_flow_routes.py    # MODIFIED — assert rate-limit kicks in
+│   ├── test_auth_routes.py             # MODIFIED — assert signup IP rate-limit + Retry-After
+│   ├── test_log_alerts.py              # NEW — 11 cases covering ntfy handler
+│   └── test_config_endpoint.py         # NEW — 3 cases for GET /config
+├── frontend/
+│   ├── service-worker.js               # MODIFIED — add /config to apiPrefixes bypass list
+│   ├── static/css/tokens.css           # MODIFIED — add --warn / --warn-surface tokens
+│   └── static/js/screens/
+│       ├── splash.js                   # MODIFIED — fetch /config, render banner
+│       └── home.js                     # MODIFIED — same
 ├── ops/
-│   ├── backup/
-│   │   ├── Dockerfile                  # NEW — alpine + postgresql-client + rclone + crond
-│   │   ├── entrypoint.sh               # NEW — installs the cron, starts crond in foreground
-│   │   ├── nightly-backup.sh           # NEW — pg_dump, rotate local, push to B2
-│   │   └── rclone.conf.example         # NEW — template for B2 creds (real one is mounted from host)
 │   ├── disk-alert/
-│   │   ├── Dockerfile                  # NEW — alpine + curl + crond
-│   │   ├── entrypoint.sh               # NEW — cron-installer + crond
+│   │   ├── Dockerfile                  # NEW — alpine + curl + tini
+│   │   ├── entrypoint.sh               # NEW — cron-installer + crond, idle if NTFY_TOPIC unset
 │   │   └── check-disk.sh               # NEW — df check, ntfy POST if > threshold
-│   └── README.md                       # NEW — operator runbook (B2 setup, ntfy topic, Sentry DSN, UptimeRobot)
-├── docker-compose.prod.yml             # MODIFIED — add backup + disk-alert services, log-driver options on all services
-├── .env.example                        # MODIFIED — add SENTRY_DSN, SHOW_BETA_BANNER, B2 creds, ntfy topic
-└── pyproject.toml                      # MODIFIED — add sentry-sdk[fastapi]
+│   └── README.md                       # NEW — operator runbook (post-deploy checklist + manual steps)
+├── docker-compose.yml                  # MODIFIED — uvicorn --proxy-headers
+├── docker-compose.prod.yml             # MODIFIED — log-driver anchor on all services + disk-alert sidecar
+├── Dockerfile                          # MODIFIED — uvicorn --proxy-headers
+└── .env.example                        # MODIFIED — RATE_LIMIT_*, NTFY_TOPIC, DISK_ALERT_THRESHOLD, SHOW_BETA_BANNER
 ```
+
+**Note:** the `ops/backup/` subtree was originally planned but Task 2 was dropped during execution (Hetzner already takes VPS-level snapshots). `pyproject.toml` was NOT modified — Task 3 went with the in-house ntfy handler instead of adding `sentry-sdk`.
 
 ---
 
@@ -78,14 +83,14 @@ dispatch-zero/
 
 Tasks are independent. Recommended order (by launch-readiness impact):
 
-1. **Task 1 — Rate limiting** (blocks runaway costs; ship first)
-2. **Task 2 — Backup pipeline** (protects user data; ship before sharing)
-3. **Task 3 — Sentry integration** (visibility; ship before sharing)
-4. **Task 4 — Log rotation + disk alert** (disk safety; can ship after sharing)
-5. **Task 5 — External uptime monitoring** (no code; manual setup, can do anytime)
-6. **Task 6 — Beta banner** (polish; ship anytime)
+1. **Task 1 — Rate limiting** (blocks runaway costs; ship first) ✅ shipped
+2. **Task 2 — Backup pipeline** ❌ **DROPPED** during execution — Hetzner already takes VPS-level snapshots that cover every realistic disaster-recovery scenario. App-level pg_dump only adds value for cross-Postgres-version migrations and single-table restores, neither of which is launch-blocking.
+3. **Task 3 — Error tracking** (visibility; ship before sharing) ✅ **REVISED** — implemented as an in-process ntfy logging handler instead of Sentry hosted, to keep the stack on Trevor's own infrastructure. Sentry-API-compatible self-hosted (Bugsink/GlitchTip) remains a 30-min migration path if push notifications become noise at scale.
+4. **Task 4 — Log rotation + disk alert** (disk safety) ✅ shipped
+5. **Task 5 — External uptime monitoring** ❌ **SKIPPED** — for an MVP with a small tester pool, word-of-mouth is sufficient. Re-evaluate once the pool exceeds ~20 active users. Self-hosted options (cron+ntfy on VPS 3, Uptime Kuma) preferred over UptimeRobot when this comes back.
+6. **Task 6 — Beta banner** (polish) ✅ shipped
 
-Each task ends in a deployable, testable state. Stop after Task 3 and you're already safe to share with testers.
+Each task ends in a deployable, testable state. The shipped scope (Tasks 1, 3, 4, 6) is sufficient to share the URL with testers safely.
 
 ---
 
@@ -529,9 +534,15 @@ Then clean up the test user via psql.
 
 ---
 
-## Task 2: Backup pipeline (pg_dump + photos → B2)
+## Task 2: Backup pipeline (pg_dump + photos → B2) — DROPPED
 
-**Files:**
+**Status:** ❌ DROPPED on 2026-04-27. Originally planned an Alpine sidecar running nightly `pg_dump` + rclone push to Backblaze B2. Trevor flagged that Hetzner already takes VPS-level snapshots (and other tooling on his side too). Those snapshots cover every disaster-recovery scenario this task addressed: VM destroyed, volume corrupted, accidental `docker volume rm`. App-level `pg_dump` only adds incremental value for (1) cross-Postgres-version migration paths, (2) single-table restores, and (3) sub-daily recovery points — none of which are launch-blocking. If a specific incident ever calls for a logical dump, `docker compose exec db pg_dump > one-off.sql.gz` is one command away.
+
+The original detailed plan content for this task is preserved below for the record but is not executed.
+
+---
+
+**Files (would-have-been):**
 - Create: `ops/backup/Dockerfile`
 - Create: `ops/backup/entrypoint.sh`
 - Create: `ops/backup/nightly-backup.sh`
@@ -824,9 +835,31 @@ Document the `ops/README.md` if not already done — it's the operator's runbook
 
 ---
 
-## Task 3: Sentry FastAPI integration
+## Task 3: Error tracking — REVISED (no Sentry)
 
-**Files:**
+**Status:** ✅ Shipped 2026-04-27 as a custom ntfy.sh logging handler instead of the originally-planned Sentry hosted integration. Same need (push-notify on unhandled exceptions in prod), different mechanism (in-process logging.Handler that POSTs to ntfy on ERROR records). Reasons for the swap:
+
+- **Self-reliance.** Trevor's stated preference for in-house infrastructure where it's reasonable. Sentry hosted is a SaaS dependency.
+- **Right-sized for the scale.** Aggregation UI, deduplication, and a dashboard browser are valuable at 1000+ users; with 5 testers, push-on-error is sufficient.
+- **No new service.** Reuses the same ntfy topic Task 4 (disk-fill alert) needed anyway. Zero new accounts.
+- **Migration path preserved.** Self-hosted Sentry-API-compatible (Bugsink or GlitchTip) is a ~30 minute swap if/when push notifications become noise.
+
+### Shipped implementation
+
+**Files actually touched:**
+- Create: `src/dispatchzero/log_alerts.py` — `NtfyAlertHandler(logging.Handler)` + `install_ntfy_handler(topic)`
+- Modify: `src/dispatchzero/config.py` — `ntfy_topic: str | None = None`
+- Modify: `src/dispatchzero/main.py` — `install_ntfy_handler(get_settings().ntfy_topic)` at module init
+- Create: `tests/test_log_alerts.py` — 11 tests covering POST behavior, dedup, level filtering, outage tolerance
+- Modify: `.env.example` — document `NTFY_TOPIC`
+
+**Behavior:** ERROR/CRITICAL log records get formatted (with traceback when `exc_info` is set), deduplicated within a 60s window (in-memory), POSTed to `https://ntfy.sh/{topic}` via fire-and-forget daemon thread. Failures swallowed silently to prevent error-reporting cascades. No-op when `NTFY_TOPIC` is unset.
+
+The original Sentry-based plan content is preserved below for the record but was not executed.
+
+---
+
+**Files (would-have-been, Sentry path):**
 - Modify: `pyproject.toml` (add `sentry-sdk[fastapi]`)
 - Modify: `src/dispatchzero/main.py` (init Sentry on startup if DSN set)
 - Modify: `src/dispatchzero/config.py` (add `sentry_dsn: str | None = None`)
@@ -1210,9 +1243,17 @@ host disk every 15 min and POSTs to ntfy.sh when /  > threshold (default
 
 ---
 
-## Task 5: External uptime monitoring (manual, no code)
+## Task 5: External uptime monitoring — SKIPPED
 
-**Files:** none (configuration is in UptimeRobot's web UI, documented in `ops/README.md`).
+**Status:** ❌ SKIPPED on 2026-04-27 for the MVP. With a small tester pool (≤ ~20 users), word-of-mouth detection is sufficient — testers will tell Trevor when the site is down faster than a 5-minute UptimeRobot interval would. Re-evaluate when the user pool grows beyond that.
+
+When this comes back, prefer self-hosted options over UptimeRobot to stay on Trevor's infrastructure: a `cron + curl + ntfy` script on VPS 3 (the Mailcow box, gives external viewpoint relative to VPS 2) is the lightest option; Uptime Kuma on VPS 3 is the more featureful option but conflicts with Mailcow's claim on ports 80/443.
+
+The original UptimeRobot plan content is preserved below for the record but was not executed.
+
+---
+
+**Files (would-have-been):** none (configuration is in UptimeRobot's web UI, documented in `ops/README.md`).
 
 - [ ] **Step 5.1: Sign up for UptimeRobot**
 
@@ -1393,18 +1434,20 @@ SHOW_BETA_BANNER=false on .env to remove it for public launch.
 
 ---
 
-## Phase 14 — Definition of Done
+## Phase 14 — Definition of Done (revised for actual shipped scope)
 
 All of the following must be true:
 
-- [ ] **Rate limits live in prod.** A user account can be made to hit 429 on `/missions/request` after the configured cap. Confirmed via the smoke script in Step 1.15.
-- [ ] **Backups verified end-to-end.** `nightly-backup.sh` produces a dump locally AND in B2; the dump can be restored to a throwaway DB and `SELECT COUNT(*) FROM users` returns the live row count. Step 2.11 documents the procedure — if you didn't run it, the task isn't done.
-- [ ] **Sentry has captured at least one real error.** The verification probe from Step 3.9 appears in the Sentry dashboard tagged `environment: production`. The probe is then removed.
-- [ ] **Log rotation is enforced.** `docker inspect` confirms the log config on at least three services.
-- [ ] **Disk alert fires.** A forced low-threshold run pushes a notification to your phone.
-- [ ] **UptimeRobot is running.** Manual outage simulation triggered an alert email AND a ntfy push (if webhook wired). Monitor is back to green.
-- [ ] **Beta banner renders.** Visible on Splash + Home; flipping `SHOW_BETA_BANNER=false` and redeploying removes it (verify the toggle works before launch day).
-- [ ] **Operator runbook (`ops/README.md`) is complete.** Anyone with sudo on VPS 2 can follow it to reproduce or audit the entire hardening setup. Includes B2 setup, rclone config location, Sentry DSN location, ntfy topic + how to subscribe, UptimeRobot dashboard URL.
+- [x] **Rate limits live in prod.** A user account can be made to hit 429 on `/missions/request` after the configured cap. Verified end-to-end against the deployed app.
+- [x] **Log rotation is enforced.** `docker inspect dispatchzero-app-1 --format '{{json .HostConfig.LogConfig}}'` returns `{"Type":"json-file","Config":{"max-file":"3","max-size":"10m"}}` for every prod service.
+- [x] **Disk-alert sidecar is live.** Service is `Up` in `docker compose ps`; idles gracefully when `NTFY_TOPIC` is unset; the script's POST mechanism was force-tested against ntfy.sh successfully.
+- [x] **ntfy logging handler is live.** `NtfyAlertHandler` attached to the root logger when `NTFY_TOPIC` is set; tests cover the dedup window, level filtering, and outage tolerance.
+- [x] **Beta banner ships toggleable.** Endpoint `GET /config` returns `{"show_beta_banner": <bool>}`; Splash + Home render the banner conditionally; flipping `SHOW_BETA_BANNER` and redeploying flips the banner.
+- [ ] **NTFY_TOPIC set on VPS 2.** Trevor's manual step — pick an unguessable topic, set it in `/opt/dispatchzero/.env`, subscribe on phone via the ntfy app. Until this is done, both Task 3 (in-app errors) and Task 4 (disk fill) are deployed-but-dormant. After setting, run `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d disk-alert app` to recreate the containers so they pick up the new env.
+
+**Skipped/dropped** (intentional, see task sections above):
+- ❌ Task 2 (off-host backups) — Hetzner snapshots cover the same scenarios.
+- ❌ Task 5 (external uptime monitoring) — word-of-mouth is sufficient at MVP scale.
 
 ---
 

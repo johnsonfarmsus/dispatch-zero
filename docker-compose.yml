@@ -36,10 +36,13 @@ services:
       redis:
         condition: service_healthy
     ports:
+      # Bound to 127.0.0.1 only — Caddy on the same host (or the dev laptop) is the
+      # sole consumer. The wildcard --forwarded-allow-ips below is safe BECAUSE of
+      # this binding: nobody on the public internet can reach 8000 directly.
       - "127.0.0.1:8000:8000"
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn dispatchzero.main:app --host 0.0.0.0 --port 8000"
+             uvicorn dispatchzero.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"
 
 volumes:
   db_data:

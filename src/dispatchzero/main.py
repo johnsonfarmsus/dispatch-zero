@@ -5,8 +5,15 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from dispatchzero.auth.routes import router as auth_router
+from dispatchzero.config import get_settings
+from dispatchzero.log_alerts import install_ntfy_handler
 from dispatchzero.missions.routes import router as missions_router
 from dispatchzero.places.routes import router as places_router
+
+# Attach the ntfy ERROR-log handler before any routers are mounted, so any
+# subsequent error from request handling bubbles up to it. No-op when
+# NTFY_TOPIC is unset (dev/local).
+install_ntfy_handler(get_settings().ntfy_topic)
 
 app = FastAPI(title="Dispatch Zero")
 
@@ -19,6 +26,18 @@ app.include_router(missions_router)
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/config")
+async def public_config() -> dict[str, bool]:
+    """Public, unauthenticated config the frontend may need at render time.
+
+    Append new public flags here rather than creating additional config endpoints.
+    """
+    s = get_settings()
+    return {
+        "show_beta_banner": s.show_beta_banner,
+    }
 
 
 # ----- Static + SPA -----

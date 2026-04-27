@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     exif_freshness_window_seconds: int = 600  # 10 min
     gps_verification_radius_m: int = 80  # single radius for all categories
 
+    # Rate limits — bounds on expensive endpoints.
+    rate_limit_mission_request_per_day: int = 50
+    rate_limit_mission_generate_per_day: int = 50
+    rate_limit_signup_per_ip_per_hour: int = 10
+
+    # Error/disk push alerts via ntfy.sh. Unset = no-op (dev/local).
+    ntfy_topic: str | None = None
+
+    # Public toggle: BETA banner on Splash + Home (flip false for public launch).
+    # Tip: omit the var entirely to default False. Do NOT set `SHOW_BETA_BANNER=`
+    # (empty string) — pydantic-settings v2 rejects that as a bool and the app
+    # would fail to start.
+    show_beta_banner: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,7 +1,14 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
@@ -15,6 +22,7 @@ services:
 
   app:
     restart: unless-stopped
+    logging: *default-logging
     # In prod we drop the host port publishing — Caddy reaches it via the docker network
     ports: !reset []
     environment:
@@ -24,11 +32,26 @@ services:
 
   db:
     restart: unless-stopped
+    logging: *default-logging
     ports: !reset []   # internal only
 
   redis:
     restart: unless-stopped
+    logging: *default-logging
     ports: !reset []   # internal only
+
+  disk-alert:
+    build: ./ops/disk-alert
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      DISK_ALERT_THRESHOLD: ${DISK_ALERT_THRESHOLD:-85}
+    volumes:
+      # Read-only mount of host root so we can df the actual host filesystem,
+      # not the container's. /etc/hostname so we report the host's name in alerts.
+      - /:/host:ro
+      - /etc/hostname:/etc/host_hostname:ro
 
 volumes:
   caddy_data:

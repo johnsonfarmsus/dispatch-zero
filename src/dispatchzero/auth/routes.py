@@ -12,6 +12,7 @@ from dispatchzero.auth.sessions import sign_session
 from dispatchzero.config import Settings, get_settings
 from dispatchzero.db import get_session
 from dispatchzero.models import User
+from dispatchzero.ratelimit import RateLimitExceeded, check_and_increment
 from dispatchzero.schemas.auth import AdventureStyle, LoginIn, MeOut, SignupIn
 from pydantic import BaseModel
 
@@ -68,10 +69,27 @@ async def _user_to_me(db: AsyncSession, user: User) -> MeOut:
 @router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=MeOut)
 async def signup(
     payload: SignupIn,
+    request: Request,
     response: Response,
     db: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
 ) -> MeOut:
+    ip = _client_ip(request)
+    try:
+        await check_and_increment(
+            redis=redis, scope="signup_ip",
+            identifier=ip,
+            max_count=settings.rate_limit_signup_per_ip_per_hour,
+            window_seconds=3600,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many requests, agent — stand by",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
+
     callsign_lower = payload.callsign.lower()
     existing = await db.execute(
         select(User).where(User.callsign_lower == callsign_lower)

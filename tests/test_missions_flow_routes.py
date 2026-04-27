@@ -172,6 +172,38 @@ async def test_capture_requires_auth(client, db_session, redis_client):
 
 
 @pytest.mark.asyncio
+async def test_missions_request_rate_limit_kicks_in(
+    client, db_session, redis_client, monkeypatch,
+):
+    """After hitting the cap, /missions/request returns 429."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "gpt-oss:120b")
+    monkeypatch.setenv("RATE_LIMIT_MISSION_REQUEST_PER_DAY", "2")
+
+    await client.post("/auth/signup", json=SIGNUP)
+
+    with respx.mock:
+        respx.post("https://overpass-api.de/api/interpreter").mock(
+            return_value=httpx.Response(200, json=_overpass_one())
+        )
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ollama_payload())
+        )
+
+        for _ in range(2):
+            r = await client.post("/missions/request", json={
+                "lat": 47.6605, "lng": -117.4198, "radius_m": 2000,
+            })
+            assert r.status_code == 200, r.text
+
+        r = await client.post("/missions/request", json={
+            "lat": 47.6605, "lng": -117.4198, "radius_m": 2000,
+        })
+    assert r.status_code == 429, r.text
+    assert "Retry-After" in r.headers
+
+
+@pytest.mark.asyncio
 async def test_rate_rejects_someone_elses_completion(
     client, db_session, redis_client, tmp_path, monkeypatch,
 ):
