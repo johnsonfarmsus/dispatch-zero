@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Error/disk push alerts via ntfy.sh. Unset = no-op (dev/local).
     ntfy_topic: str | None = None
 
+    # Public toggle: BETA banner on Splash + Home (flip false for public launch).
+    show_beta_banner: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

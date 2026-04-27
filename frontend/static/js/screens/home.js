@@ -4,6 +4,7 @@ import { setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
 import { getFreshFix, clearMissionCache, clearLastDebrief } from "../flow.js";
 import { styleMeta } from "../style-meta.js";
+import { betaBannerEl } from "./splash.js";
 
 export async function home() {
   const r = await api.get("/auth/me");
@@ -14,6 +15,13 @@ export async function home() {
   }
   const user = r.data;
   setUser(user);
+
+  // Public BETA banner toggle — render without banner if /config fails.
+  let showBanner = false;
+  try {
+    const cfg = await api.get("/config");
+    if (cfg.ok) showBanner = !!cfg.data.show_beta_banner;
+  } catch { /* ignore */ }
 
   const logoutLink = el("a", { href: "#", class: "muted" }, "Stand down");
   const requestBtn = el("button", { class: "primary" }, "Request Dispatch");
@@ -28,6 +36,7 @@ export async function home() {
       el("span", { class: "code" }, user.callsign),
     ),
     el("div", { class: "content stack" },
+      ...(showBanner ? [betaBannerEl()] : []),
       el("div", { class: "row" },
         el("img", {
           src: `/static/avatars/zero-${user.adventure_style}.png`,

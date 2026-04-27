@@ -28,6 +28,15 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/config")
+async def public_config() -> dict:
+    """Public, unauthenticated config the frontend may need to render."""
+    s = get_settings()
+    return {
+        "show_beta_banner": s.show_beta_banner,
+    }
+
+
 # ----- Static + SPA -----
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
