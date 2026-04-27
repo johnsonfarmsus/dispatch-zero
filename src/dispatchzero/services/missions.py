@@ -1,3 +1,4 @@
+import re
 import uuid
 from typing import Literal
 
@@ -62,8 +63,9 @@ async def get_or_generate_mission(
     finally:
         await client.aclose()
 
+    cleaned = _strip_markdown_fences(raw)
     try:
-        content = MissionContent.model_validate_json(raw)
+        content = MissionContent.model_validate_json(cleaned)
     except ValidationError as e:
         raise MissionGenerationError(f"ollama returned invalid mission shape: {e}") from e
 
@@ -80,6 +82,18 @@ async def get_or_generate_mission(
     await db.commit()
     await db.refresh(mission)
     return mission
+
+
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_markdown_fences(s: str) -> str:
+    """Some models (esp. reasoning models) wrap JSON in ```json ... ``` despite
+    response_format=json_object. Defensive parse: unwrap if wrapped, else return as-is."""
+    m = _FENCE_RE.match(s.strip())
+    if m:
+        return m.group(1)
+    return s
 
 
 async def _library_lookup(

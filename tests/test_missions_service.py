@@ -10,8 +10,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dispatchzero.models import Mission, Place, User
 from dispatchzero.services.missions import (
     MissionGenerationError,
+    _strip_markdown_fences,
     get_or_generate_mission,
 )
+
+
+def test_strip_markdown_fences_unwraps_json_block():
+    raw = '```json\n{"x": 1}\n```'
+    assert _strip_markdown_fences(raw) == '{"x": 1}'
+
+
+def test_strip_markdown_fences_unwraps_plain_block():
+    raw = '```\n{"x": 1}\n```'
+    assert _strip_markdown_fences(raw) == '{"x": 1}'
+
+
+def test_strip_markdown_fences_passes_through_unwrapped_json():
+    raw = '{"x": 1}'
+    assert _strip_markdown_fences(raw) == '{"x": 1}'
+
+
+def test_strip_markdown_fences_handles_leading_whitespace():
+    raw = '\n\n```json\n{"x": 1}\n```\n'
+    assert _strip_markdown_fences(raw) == '{"x": 1}'
 
 
 async def _make_user_and_place(db: AsyncSession) -> tuple[User, Place]:
@@ -54,6 +75,7 @@ def _ollama_response(payload: dict) -> dict:
 @pytest.mark.asyncio
 async def test_generate_calls_ollama_and_persists_mission(db_session, monkeypatch):
     monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "gpt-oss:120b")  # pin to default so assertion is stable
     user, place = await _make_user_and_place(db_session)
 
     payload = {
