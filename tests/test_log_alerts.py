@@ -1,4 +1,5 @@
 import logging
+import time
 
 import httpx
 import respx
@@ -104,6 +105,47 @@ def test_body_truncated_to_max_chars():
 def test_handler_level_is_error():
     h = NtfyAlertHandler(topic="test-topic", synchronous_send=True)
     assert h.level == logging.ERROR
+
+
+@respx.mock
+def test_below_error_level_is_filtered_out():
+    """Behavioral check: WARNING/INFO records routed through a Logger
+    are filtered out by the handler's level=ERROR before emit() runs.
+    Python's level gate lives on Logger.callHandlers, not Handler.handle —
+    so the test goes through a real Logger to exercise the real path."""
+    route = respx.post("https://ntfy.sh/test-topic").mock(
+        return_value=httpx.Response(200)
+    )
+    h = _sync_handler()
+    logger = logging.getLogger("test_log_alerts.level_filter")
+    logger.setLevel(logging.DEBUG)  # let everything reach the handlers
+    logger.addHandler(h)
+    try:
+        logger.warning("warn")
+        logger.info("info")
+        assert route.call_count == 0
+        logger.error("err")
+        assert route.call_count == 1
+    finally:
+        logger.removeHandler(h)
+
+
+@respx.mock
+def test_coalesce_window_expiry_allows_resend():
+    """After the coalesce window passes, the same message fires again."""
+    route = respx.post("https://ntfy.sh/test-topic").mock(
+        return_value=httpx.Response(200)
+    )
+    # Tiny window so the test runs fast.
+    h = NtfyAlertHandler(
+        topic="test-topic", synchronous_send=True, coalesce_seconds=1,
+    )
+    h.setFormatter(logging.Formatter(fmt="%(message)s"))
+    h.emit(_make_record("repeat"))
+    assert route.call_count == 1
+    time.sleep(1.1)
+    h.emit(_make_record("repeat"))
+    assert route.call_count == 2
 
 
 def test_install_with_no_topic_is_noop():

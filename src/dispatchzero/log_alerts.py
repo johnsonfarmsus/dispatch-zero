@@ -52,6 +52,8 @@ class NtfyAlertHandler(logging.Handler):
         topic: str,
         *,
         coalesce_seconds: int = 60,
+        # ntfy.sh accepts up to ~4 KiB body. 1500 chars keeps a phone push
+        # readable while leaving room for the deepest part of a traceback.
         max_body_chars: int = 1500,
         synchronous_send: bool = False,
         sender: Callable[..., None] | None = None,
