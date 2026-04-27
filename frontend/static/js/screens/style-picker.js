@@ -2,12 +2,7 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { getUser, setUser } from "../state.js";
 import { navigate } from "../router.js";
-
-const META = {
-  pulp:   { top: "PULP // THE ARCHIVE",   bottom: "Warm, expeditionary. Brass-amber palette." },
-  agency: { top: "AGENCY // CLASSIFIED",  bottom: "Clipped, classified. Cold cyan, surveillance feel." },
-  guild:  { top: "GUILD // CEREMONIAL",   bottom: "Ancient, ceremonial. Hooded, deep purple register." },
-};
+import { STYLE_META } from "../style-meta.js";
 
 export function stylePicker() {
   const current = getUser()?.adventure_style || "agency";
@@ -15,6 +10,7 @@ export function stylePicker() {
 
   function styleOption(s) {
     const isCurrent = s === current;
+    const meta = STYLE_META[s];
     const btn = el("button", {
       class: isCurrent ? "primary" : "",
       style: {
@@ -22,13 +18,26 @@ export function stylePicker() {
         padding: "var(--s-4)",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--s-1)",
+        gap: "var(--s-2)",
       },
     },
-      el("span", { class: "subtitle" }, META[s].top),
-      el("span", { style: { color: "var(--text)" } }, META[s].bottom),
+      el("div", { class: "row", style: { justifyContent: "space-between", alignItems: "baseline" } },
+        el("span", { class: "subtitle" }, meta.org),
+        el("span", { class: "muted mono", style: { fontSize: "var(--t-xs)" } },
+          isCurrent ? "CURRENT" : ""),
+      ),
+      el("span", {
+        style: {
+          color: "var(--text)",
+          fontFamily: "var(--font-serif)",
+          lineHeight: "1.5",
+        },
+      }, meta.tone),
+      el("span", { class: "muted mono", style: { fontSize: "var(--t-xs)" } },
+        `Handler: ${meta.handler}`),
     );
     btn.addEventListener("click", async () => {
+      if (isCurrent) return;
       errEl.hidden = true;
       try {
         const r = await api.post("/auth/style", { adventure_style: s });
@@ -49,12 +58,12 @@ export function stylePicker() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— style"),
+      el("span", { class: "muted" }, "— organization"),
     ),
-    el("div", { class: "content stack" },
-      el("div", { class: "title" }, "Operating Style"),
+    el("div", { class: "content stack scrollable" },
+      el("div", { class: "title" }, "Choose Your Organization"),
       el("div", { class: "muted" },
-        "Style controls Zero's voice, tone, and visual register. Switching does not affect completion history.",
+        "Three organizations dispatch you to the same real places. Each has its own handler, its own tone, its own way of asking. Switching does not affect what you've already documented.",
       ),
       styleOption("pulp"),
       styleOption("agency"),

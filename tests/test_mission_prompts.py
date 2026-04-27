@@ -67,6 +67,15 @@ def test_prompt_does_not_include_raw_coordinates():
     assert "coordinates" not in text.lower() or "do not invent" in text.lower()
 
 
+def test_each_style_uses_role_prefixed_handler_name():
+    pulp = "\n".join(m["content"] for m in build_mission_prompt(style="pulp", **_ctx()))
+    agency = "\n".join(m["content"] for m in build_mission_prompt(style="agency", **_ctx()))
+    guild = "\n".join(m["content"] for m in build_mission_prompt(style="guild", **_ctx()))
+    assert "Professor Zero" in pulp
+    assert "Director Zero" in agency
+    assert "Guildmaster Zero" in guild
+
+
 def test_unknown_style_raises():
     with pytest.raises(ValueError):
         build_mission_prompt(

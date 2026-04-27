@@ -3,12 +3,7 @@ import { api } from "../api.js";
 import { setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
 import { getFreshFix, clearMissionCache, clearLastDebrief } from "../flow.js";
-
-const STYLE_LABEL = {
-  pulp:   "PULP // THE ARCHIVE",
-  agency: "AGENCY // CLASSIFIED",
-  guild:  "GUILD // CEREMONIAL",
-};
+import { styleMeta } from "../style-meta.js";
 
 export async function home() {
   const r = await api.get("/auth/me");
@@ -44,11 +39,10 @@ export async function home() {
         }),
         el("div", {},
           el("div", { class: "subtitle" }, "handler"),
-          el("div", { class: "title", style: { fontSize: "var(--t-xl)" } }, "Zero"),
-          el("div", {
-            class: "muted mono",
-            style: { fontSize: "var(--t-xs)" },
-          }, STYLE_LABEL[user.adventure_style] || user.adventure_style),
+          el("div", { class: "title", style: { fontSize: "var(--t-xl)" } },
+            styleMeta(user.adventure_style).handler),
+          el("div", { class: "muted", style: { fontStyle: "italic" } },
+            styleMeta(user.adventure_style).org),
         ),
       ),
       el("div", { class: "divider" }),
@@ -65,7 +59,7 @@ export async function home() {
       ),
       el("div", { class: "divider" }),
       el("div", { class: "row", style: { justifyContent: "space-between" } },
-        el("a", { href: "/style", "data-route": true, class: "muted" }, "Change style"),
+        el("a", { href: "/style", "data-route": true, class: "muted" }, "Change organization"),
         logoutLink,
       ),
     ),

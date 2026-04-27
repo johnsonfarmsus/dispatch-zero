@@ -2,6 +2,7 @@ import { el } from "../../dom.js";
 import { loadMission } from "../../flow.js";
 import { getUser } from "../../state.js";
 import { navigate } from "../../router.js";
+import { styleMeta } from "../../style-meta.js";
 
 export async function dispatch({ id }) {
   let mission;
@@ -42,9 +43,11 @@ export async function dispatch({ id }) {
       el("div", { class: "handler-mark" },
         el("img", {
           src: `/static/avatars/zero-${mission.adventure_style}.png`,
-          alt: `Zero — ${mission.adventure_style}`,
+          alt: styleMeta(mission.adventure_style).handler,
         }),
-        el("span", {}, `ZERO // ${mission.adventure_style.toUpperCase()}`),
+        el("span", {},
+          `${styleMeta(mission.adventure_style).handler.toUpperCase()} // ${styleMeta(mission.adventure_style).org.toUpperCase()}`,
+        ),
       ),
       el("div", { class: "subtitle" }, "DISPATCH"),
       el("div", { class: "title", style: { fontSize: "var(--t-2xl)" } },
