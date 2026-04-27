@@ -1,1 +1,110 @@
-/* Task 4 fills this in */
+/* ---------- Layout primitives ----------
+   Every screen uses .screen as its root. Three-row CSS-grid frame:
+   header, content, actions. No scroll inside .screen by default.
+   ----------------------------------------- */
+
+#app {
+  height: 100dvh;
+  width: 100dvw;
+  display: grid;
+  place-items: stretch;
+}
+
+.screen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+  padding: var(--s-5);
+  gap: var(--s-5);
+}
+
+.screen > .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: var(--border-rule);
+  padding-bottom: var(--s-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.screen > .content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.screen > .content.scrollable {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screen > .actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  border-top: var(--border-rule);
+  padding-top: var(--s-3);
+}
+
+.field { display: flex; flex-direction: column; gap: var(--s-2); }
+.stack { display: flex; flex-direction: column; gap: var(--s-4); }
+.row { display: flex; align-items: center; gap: var(--s-3); }
+.divider { border-top: var(--border-rule); margin: var(--s-4) 0; }
+
+.code {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.title {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--t-lg);
+  color: var(--text);
+}
+
+.subtitle {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: var(--t-xs);
+  color: var(--text-muted);
+}
+
+.handler-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.handler-mark img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--surface-rule);
+  background: var(--surface-raised);
+  object-fit: cover;
+}
+
+.fault {
+  border: 1px solid var(--danger);
+  border-radius: var(--r-sm);
+  padding: var(--s-3) var(--s-4);
+  color: var(--danger);
+  font-size: var(--t-sm);
+}

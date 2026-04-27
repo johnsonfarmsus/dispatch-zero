@@ -1,3 +1,151 @@
-/* Stub — Task 3 fills this in */
-:root { color-scheme: dark; }
-body { background: #0e0c0a; color: #e8e1d8; margin: 0; }
+/* ---------- Dispatch Zero — Design Tokens ----------
+   One source of truth for color, typography, spacing.
+   Per-style accent set via [data-style] on <body>.
+   ----------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — warm charcoal, not cold black */
+  --surface-bg: #0e0c0a;
+  --surface-raised: #15120e;
+  --surface-rule: #2a2520;
+
+  /* Text */
+  --text: #e8e1d8;
+  --text-muted: #857d72;
+  --text-faint: #5a5249;
+
+  /* Accent — overridden per style below */
+  --accent: #4ec5d6;
+  --accent-dim: #2c7a86;
+
+  /* State */
+  --danger: #d6553c;
+  --success: #7c9a6e;
+
+  /* Typography stacks */
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-serif: ui-serif, "Iowan Old Style", "Apple Garamond", Georgia, serif;
+
+  /* Type scale */
+  --t-xs: 0.75rem;
+  --t-sm: 0.875rem;
+  --t-base: 1rem;
+  --t-lg: 1.125rem;
+  --t-xl: 1.25rem;
+  --t-2xl: 1.5rem;
+  --t-3xl: 2rem;
+
+  /* Spacing scale */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+
+  /* Radii — almost square, dossier feel */
+  --r-sm: 2px;
+  --r-md: 4px;
+
+  /* Borders */
+  --border-rule: 1px solid var(--surface-rule);
+  --border-accent: 1px solid var(--accent);
+}
+
+body[data-style="pulp"] {
+  --accent: #d68a3c;
+  --accent-dim: #7a4d20;
+}
+
+body[data-style="agency"] {
+  --accent: #4ec5d6;
+  --accent-dim: #2c7a86;
+}
+
+body[data-style="guild"] {
+  --accent: #a472d6;
+  --accent-dim: #5e3e85;
+}
+
+/* ----- Base reset ----- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--surface-bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--t-base);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overflow: hidden;
+  height: 100dvh;
+  width: 100dvw;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button {
+  font: inherit;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--surface-rule);
+  border-radius: var(--r-sm);
+  padding: var(--s-3) var(--s-4);
+  cursor: pointer;
+  transition: border-color 80ms, color 80ms, background 80ms;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--surface-bg);
+}
+
+input, select, textarea {
+  font: inherit;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--surface-rule);
+  border-radius: var(--r-sm);
+  padding: var(--s-3) var(--s-4);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+label {
+  display: block;
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: var(--s-2);
+}
+
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
