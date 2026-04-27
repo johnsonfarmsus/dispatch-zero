@@ -256,7 +256,12 @@ async def capture(
             capture_lat=lat, capture_lng=lng, capture_accuracy_m=accuracy_m,
         )
     except CaptureFailedError as e:
-        # In-character: don't leak whether GPS or EXIF failed
+        # In-character to the client: don't leak GPS vs EXIF.
+        # Server-side: log the actual reason so we can debug from the logs.
+        log.info(
+            "capture rejected mission_id=%s user_id=%s reason=%s",
+            mission_id, user.id, e,
+        )
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "the proof is not yet sufficient, agent — try again",

@@ -61,7 +61,9 @@ def test_verify_fails_for_stale_exif():
     assert result.fail_reason == "stale_capture"
 
 
-def test_verify_fails_when_exif_missing_entirely():
+def test_verify_passes_when_exif_missing_entirely():
+    """iOS Safari often strips EXIF; missing EXIF must not block verification.
+    GPS is the hard gate. EXIF is a soft anti-cheat heuristic for stale replays."""
     raw = make_test_jpeg(captured_at=None)
     result = verify_capture(
         raw_bytes=raw,
@@ -69,8 +71,22 @@ def test_verify_fails_when_exif_missing_entirely():
         target_lat=47.6605, target_lng=-117.4198,
         radius_m=80, freshness_window_seconds=600,
     )
+    assert result.verified is True
+    assert result.fail_reason is None
+    assert result.had_exif is False
+
+
+def test_verify_still_fails_out_of_radius_even_with_no_exif():
+    """Missing EXIF is forgiven, but GPS distance still gates."""
+    raw = make_test_jpeg(captured_at=None)
+    result = verify_capture(
+        raw_bytes=raw,
+        capture_lat=47.6605, capture_lng=-117.4178,  # ~150m
+        target_lat=47.6605, target_lng=-117.4198,
+        radius_m=80, freshness_window_seconds=600,
+    )
     assert result.verified is False
-    assert result.fail_reason == "no_exif"
+    assert result.fail_reason == "out_of_radius"
 
 
 def test_verify_default_radius_is_80m():

@@ -29,9 +29,17 @@ def verify_capture(
     freshness_window_seconds: int = 600,
     now: datetime | None = None,
 ) -> VerificationResult:
-    """Apply GPS-radius + EXIF-freshness gates. Returns a structured decision.
+    """Apply GPS-radius (hard) + EXIF-freshness (soft) gates.
 
-    Single radius for all categories — set to 80m by default to absorb GPS drift.
+    Per the photo-capture spec: GPS is the verification primitive; EXIF
+    DateTimeOriginal is a soft anti-cheat heuristic. iOS Safari often strips
+    EXIF when photos go through `<input type=file capture=environment>`, so
+    we cannot require it. Behavior:
+
+    - distance > radius_m → fail (out_of_radius)
+    - EXIF DateTimeOriginal present AND outside freshness window → fail
+      (stale_capture; obvious replay of an old photo)
+    - EXIF missing entirely OR present-and-fresh → pass
     """
     distance_m = haversine_distance_m(capture_lat, capture_lng, target_lat, target_lng)
     exif_dt = read_exif_datetime(raw_bytes)
@@ -47,10 +55,11 @@ def verify_capture(
 
     if exif_dt is None:
         return VerificationResult(
-            verified=False, fail_reason="no_exif",
+            verified=True, fail_reason=None,
             distance_m=distance_m, exif_delta_seconds=None,
             had_exif=had_exif, had_exif_gps=had_exif_gps,
         )
+
     now_naive = (now or datetime.now(timezone.utc)).replace(tzinfo=None)
     delta = int((now_naive - exif_dt).total_seconds())
     if delta < 0 or delta > freshness_window_seconds:
