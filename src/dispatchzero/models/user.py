@@ -26,8 +26,6 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     adventure_style: Mapped[str] = mapped_column(String(16), nullable=False)
 
-    xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    rank: Mapped[str] = mapped_column(String(32), default="recruit", nullable=False)
     missions_this_week: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     missions_last_week: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

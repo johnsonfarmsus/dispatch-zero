@@ -1,0 +1,58 @@
+import uuid
+from datetime import datetime
+from enum import StrEnum
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from dispatchzero.models.base import Base
+
+
+class LocationReason(StrEnum):
+    GONE = "gone"
+    NOT_FOUND = "not_found"
+    INACCESSIBLE = "inaccessible"
+    UNSAFE = "unsafe"
+
+
+class Completion(Base):
+    __tablename__ = "completions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    mission_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("missions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    place_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("places.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    photo_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    capture_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    capture_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    capture_accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    had_exif: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    exif_datetime_delta_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    had_exif_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    location_rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    mission_rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    location_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

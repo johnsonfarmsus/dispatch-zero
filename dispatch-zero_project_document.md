@@ -113,7 +113,7 @@ Audio is generated server-side when missions are created and cached as files. Th
 
 ### Adventure Styles
 
-Users choose one of three narrative styles during onboarding. This controls presentation, copy, Zero's voice, faction framing, UI tone, map style, and badge and rank labels. It does not change progression systems, data, place logic, or user history. Styles can be changed at any time without losing progress.
+Users choose one of three narrative styles during onboarding. This controls presentation, copy, Zero's voice, faction framing, UI tone, map style, and badge labels. It does not change progression systems, data, place logic, or user history. Styles can be changed at any time without losing progress.
 
 | Style | Organization | Tone |
 |---|---|---|
@@ -126,7 +126,6 @@ Users choose one of three narrative styles during onboarding. This controls pres
 - Zero's voice, tone, and sign-off.
 - Mission briefing language and framing.
 - Organization name and implied lore.
-- Rank ladder labels.
 - Badge names and descriptions.
 - UI accent palette and icon style.
 - Map tile style.
@@ -134,7 +133,7 @@ Users choose one of three narrative styles during onboarding. This controls pres
 ### What the Style Layer Does Not Control
 
 - Place selection and ranking logic.
-- Points and XP values.
+- Completion count and weekly activity counter.
 - Completion state and user history.
 - Backend data model.
 
@@ -273,7 +272,7 @@ Each screen should be:
 | 5 | Transit | Active mission state with live compass and distance readout. |
 | 6 | Capture | In-app camera proof capture. |
 | 7 | Verification | Short verification state, usually auto-advancing. |
-| 8 | Debrief | Mission completion confirmation, Zero response, XP/reward result. |
+| 8 | Debrief | Mission completion confirmation, Zero response, badge or milestone callout if any. |
 | 9 | Rating | Independent location and mission rating. |
 
 ### Home Screen (Screen 1)
@@ -283,9 +282,8 @@ The Home screen is the true main game screen. It functions as base of operations
 It should include:
 
 - User display name or callsign.
-- Current rank.
-- Current streak.
-- XP or equivalent progression summary.
+- Total completions count (per-category breakdown available on a separate screen).
+- Missions this week.
 - Recent mission history in compact dossier form.
 - A clear `Request Dispatch` button as the primary action.
 
@@ -515,20 +513,15 @@ If CartoDB tiles become unavailable or paid, the replacement is a single tile UR
 
 ## Progression System
 
-### Points and XP
+### Completions, Not Points
 
-Points are universal and style-agnostic. Rank and badge labels change per style but the underlying XP values do not.
+Progression is tracked as a count of verified completions, not abstract "experience points." A user has completed N places, with breakdown available per category (murals documented, sculptures documented, etc.). No XP, no levels, no rank ladder. Each location counts once toward the total — the 90-day re-entry rule allows the same location to count again later, but at any given moment a user's profile shows distinct places visited.
 
-### Rank Structure
+This was simplified from an earlier XP/rank design — the count is more honest about what the user actually did, and a "ranks unlocked" gating system added complexity without changing behavior we wanted.
 
-| XP | Generic | Pulp Adventure | Secret Agency | Fantasy Guild |
-|---|---|---|---|---|
-| 0 | Recruit | Recruit | Asset | Initiate |
-| 500 | Scout | Field Scout | Operative | Scout |
-| 1500 | Pathfinder | Pathfinder | Field Agent | Wayfarer |
-| 3500 | Ranger | Expedition Lead | Senior Agent | Relic Warden |
-| 7500 | Operative | Senior Operative | Case Officer | Chronicler |
-| 15000 | Legend | Archive Legend | Director's Asset | Guild Master |
+### Weekly Activity
+
+A separate "missions this week" counter shows recent activity, encouraging without being coercive (no daily-streak cliff). Resets Monday 00:00 UTC.
 
 ### Badge Philosophy
 
@@ -679,8 +672,6 @@ A future opt-in recovery mechanism (one-time recovery code shown at signup, save
 | `callsign` | Unique case-insensitive login identifier and display name |
 | `password_hash` | Argon2id hash; no recovery, no email collected |
 | `adventure_style` | Current selected style |
-| `xp` | Total experience points |
-| `rank` | Derived from XP |
 | `completed_place_ids` | Array used for no-repeat filtering (place re-enters pool 90 days after last completion) |
 | `missions_this_week` | Count of missions completed in current calendar week |
 | `missions_last_week` | Count from prior week for display purposes |
@@ -704,7 +695,6 @@ A future opt-in recovery mechanism (one-time recovery code shown at signup, save
 | `location_rating` | Up, down, none |
 | `mission_rating` | Up, down, none |
 | `location_reason` | Gone, not_found, inaccessible, unsafe, null |
-| `xp_awarded` | Points granted for this completion |
 | `completed_at` | Timestamp |
 
 ---
@@ -856,7 +846,7 @@ The MVP validates the core loop only:
 - Optional TTS playback via Kokoro
 - In-app camera capture
 - Geolocation-based verification
-- Points, rank progression, first badge set
+- Completion count + weekly activity counter, first badge set
 - Two-axis location and mission ratings
 - Mission library save and reuse
 - No-repeat place filtering

@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     ollama_model: str = "gpt-oss:120b"
     ollama_timeout_seconds: int = 15
 
+    # Photo capture and verification
+    photo_upload_dir: str = "/uploads"
+    photo_max_dimension: int = 600
+    photo_jpeg_quality: int = 70
+    exif_freshness_window_seconds: int = 600  # 10 min
+    gps_verification_radius_m: int = 80  # single radius for all categories
+
 
 @lru_cache
 def get_settings() -> Settings:

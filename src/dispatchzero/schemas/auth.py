@@ -26,5 +26,5 @@ class MeOut(BaseModel):
     id: uuid.UUID
     callsign: str
     adventure_style: str
-    xp: int
-    rank: str
+    completions_count: int = 0
+    missions_this_week: int = 0
