@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     exif_freshness_window_seconds: int = 600  # 10 min
     gps_verification_radius_m: int = 80  # single radius for all categories
 
+    # Rate limits — bounds on expensive endpoints.
+    rate_limit_mission_request_per_day: int = 50
+    rate_limit_mission_generate_per_day: int = 50
+    rate_limit_signup_per_ip_per_hour: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

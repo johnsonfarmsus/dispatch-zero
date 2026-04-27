@@ -14,6 +14,7 @@ from dispatchzero.auth.deps import current_user
 from dispatchzero.config import Settings, get_settings
 from dispatchzero.db import get_session
 from dispatchzero.models import Completion, Mission, Place, User
+from dispatchzero.ratelimit import RateLimitExceeded, check_and_increment
 from dispatchzero.schemas.completions import (
     CompletionOut,
     DebriefOut,
@@ -104,7 +105,22 @@ async def generate(
     payload: MissionGenerateIn,
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
 ) -> MissionOut:
+    settings = get_settings()
+    try:
+        await check_and_increment(
+            redis=redis, scope="mission_generate",
+            identifier=str(user.id),
+            max_count=settings.rate_limit_mission_generate_per_day,
+            window_seconds=86400,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many requests, agent — stand by",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
     try:
         mission = await get_or_generate_mission(
             db=db,
@@ -155,6 +171,20 @@ async def request_mission(
     recently completed by this user) place wins. Silent escalation — caller
     gets a single mission response regardless of which tier succeeded.
     """
+    settings = get_settings()
+    try:
+        await check_and_increment(
+            redis=redis, scope="mission_request",
+            identifier=str(user.id),
+            max_count=settings.rate_limit_mission_request_per_day,
+            window_seconds=86400,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many requests, agent — stand by",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
     tiers = [(payload.radius_m, "overpass", False)] + _REQUEST_TIERS
     seen: set[tuple[int, str, bool]] = set()
     places: list = []

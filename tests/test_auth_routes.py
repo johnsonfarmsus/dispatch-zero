@@ -129,3 +129,22 @@ async def test_logout_clears_cookie(client, db_session, redis_client):
     # cookie deleted (set with empty value + past expiry)
     r2 = await client.get("/auth/me")
     assert r2.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signup_rate_limited_per_ip(client, db_session, redis_client, monkeypatch):
+    """After hitting the cap, /auth/signup returns 429."""
+    monkeypatch.setenv("RATE_LIMIT_SIGNUP_PER_IP_PER_HOUR", "3")
+    for i in range(3):
+        r = await client.post("/auth/signup", json={
+            "callsign": f"AgentX{i}",
+            "password": "long-enough-password",
+            "adventure_style": "agency",
+        })
+        assert r.status_code == 201, r.text
+    r = await client.post("/auth/signup", json={
+        "callsign": "AgentXN",
+        "password": "long-enough-password",
+        "adventure_style": "agency",
+    })
+    assert r.status_code == 429
