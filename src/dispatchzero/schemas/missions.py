@@ -20,9 +20,19 @@ class MissionGenerateIn(BaseModel):
     adventure_style: AdventureStyle | None = None  # defaults to user's profile
 
 
+class PlaceMini(BaseModel):
+    id: uuid.UUID
+    name: str | None
+    category: str
+    description: str | None = None
+    lat: float
+    lng: float
+
+
 class MissionOut(BaseModel):
     id: uuid.UUID
     place_id: uuid.UUID
+    place: PlaceMini
     adventure_style: str
     dispatch_summary: str
     briefing_text: str

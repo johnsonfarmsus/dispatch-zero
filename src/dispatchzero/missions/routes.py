@@ -3,7 +3,7 @@ from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.auth.deps import current_user
@@ -16,7 +16,7 @@ from dispatchzero.schemas.completions import (
     MissionRequestIn,
     RateIn,
 )
-from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut
+from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut, PlaceMini
 from dispatchzero.services.discovery import discover_nearby
 from dispatchzero.services.mission_flow import (
     CaptureFailedError,
@@ -38,10 +38,35 @@ async def _get_redis(
     return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
-def _mission_to_out(mission: Mission) -> MissionOut:
+async def _place_lat_lng(db: AsyncSession, place_id: uuid.UUID) -> tuple[float, float]:
+    """Read a Place's PostGIS geography column as (lat, lng)."""
+    row = (
+        await db.execute(
+            text(
+                "SELECT ST_Y(coordinates::geometry), ST_X(coordinates::geometry) "
+                "FROM places WHERE id = :pid"
+            ),
+            {"pid": place_id},
+        )
+    ).one()
+    return float(row[0]), float(row[1])
+
+
+async def _mission_to_out(
+    db: AsyncSession, mission: Mission, place: Place
+) -> MissionOut:
+    lat, lng = await _place_lat_lng(db, place.id)
     return MissionOut(
         id=mission.id,
         place_id=mission.place_id,
+        place=PlaceMini(
+            id=place.id,
+            name=place.name,
+            category=place.category,
+            description=place.description,
+            lat=lat,
+            lng=lng,
+        ),
         adventure_style=mission.adventure_style,
         dispatch_summary=mission.dispatch_summary,
         briefing_text=mission.briefing_text,
@@ -51,6 +76,12 @@ def _mission_to_out(mission: Mission) -> MissionOut:
         ai_model=mission.ai_model,
         status=mission.status,
     )
+
+
+async def _fetch_place(db: AsyncSession, place_id: uuid.UUID) -> Place:
+    return (
+        await db.execute(select(Place).where(Place.id == place_id))
+    ).scalar_one()
 
 
 def _completion_to_out(c: Completion) -> CompletionOut:
@@ -84,7 +115,8 @@ async def generate(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
         ) from e
-    return _mission_to_out(mission)
+    place = await _fetch_place(db, mission.place_id)
+    return await _mission_to_out(db, mission, place)
 
 
 @router.post("/request", response_model=MissionOut)
@@ -114,7 +146,23 @@ async def request_mission(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
         ) from e
-    return _mission_to_out(mission)
+    place = await _fetch_place(db, mission.place_id)
+    return await _mission_to_out(db, mission, place)
+
+
+@router.get("/{mission_id}", response_model=MissionOut)
+async def get_mission(
+    mission_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> MissionOut:
+    mission = (
+        await db.execute(select(Mission).where(Mission.id == mission_id))
+    ).scalar_one_or_none()
+    if mission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "mission not found")
+    place = await _fetch_place(db, mission.place_id)
+    return await _mission_to_out(db, mission, place)
 
 
 @router.post("/{mission_id}/accept", status_code=status.HTTP_204_NO_CONTENT)
