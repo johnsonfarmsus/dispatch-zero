@@ -19,6 +19,8 @@ services:
     ports: !reset []
     environment:
       APP_ENV: production
+    volumes:
+      - /opt/dispatchzero/uploads:/uploads
 
   db:
     restart: unless-stopped
