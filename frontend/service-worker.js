@@ -1,15 +1,14 @@
 // Minimal service worker — caches the app shell.
-const SHELL_CACHE = "dz-shell-v1";
+//
+// JS is intentionally NOT in the shell cache. Caching it caused a stale-app
+// bug where a deploy added new routes but old `app.js` was served from the
+// SW cache, breaking navigation. JS is fetched fresh every load; the browser
+// HTTP cache still helps repeat-load speed.
+const SHELL_CACHE = "dz-shell-v2";
 const SHELL_FILES = [
-  "/",
   "/static/css/tokens.css",
   "/static/css/layout.css",
   "/static/css/screens.css",
-  "/static/js/app.js",
-  "/static/js/router.js",
-  "/static/js/api.js",
-  "/static/js/state.js",
-  "/static/js/dom.js",
   "/manifest.webmanifest",
 ];
 
