@@ -39,38 +39,43 @@ Not in scope (would be over-engineering for a small-pool launch):
 
 ---
 
-## Repo layout deltas
+## Repo layout (actual, post-execution)
 
 ```
 dispatch-zero/
 ├── src/dispatchzero/
-│   ├── config.py                       # MODIFIED — add SENTRY_DSN, SHOW_BETA_BANNER, rate-limit caps
-│   ├── main.py                         # MODIFIED — Sentry init, banner endpoint
+│   ├── config.py                       # MODIFIED — rate-limit caps, ntfy_topic, show_beta_banner
+│   ├── main.py                         # MODIFIED — install_ntfy_handler, GET /config, --proxy-headers
 │   ├── auth/routes.py                  # MODIFIED — IP rate-limit on /auth/signup
-│   ├── missions/routes.py              # MODIFIED — per-user rate-limit on /missions/request and /missions/generate
-│   └── ratelimit.py                    # NEW — shared rate-limit helper (Redis-backed, reuses login pattern)
+│   ├── missions/routes.py              # MODIFIED — per-user rate-limit on /missions/request + /generate
+│   ├── ratelimit.py                    # NEW — shared rate-limit helper (Redis-backed)
+│   └── log_alerts.py                   # NEW — NtfyAlertHandler + install_ntfy_handler
 ├── tests/
-│   ├── test_ratelimit.py               # NEW — unit + integration coverage of the rate limiter
+│   ├── test_ratelimit.py               # MODIFIED — 4 new check_and_increment cases
 │   ├── test_missions_routes.py         # MODIFIED — assert rate-limit kicks in
-│   └── test_auth_routes.py             # MODIFIED — assert signup IP rate-limit
-├── frontend/static/js/screens/
-│   ├── splash.js                       # MODIFIED — render banner if /config returns SHOW_BETA_BANNER
-│   └── home.js                         # MODIFIED — same
+│   ├── test_missions_flow_routes.py    # MODIFIED — assert rate-limit kicks in
+│   ├── test_auth_routes.py             # MODIFIED — assert signup IP rate-limit + Retry-After
+│   ├── test_log_alerts.py              # NEW — 11 cases covering ntfy handler
+│   └── test_config_endpoint.py         # NEW — 3 cases for GET /config
+├── frontend/
+│   ├── service-worker.js               # MODIFIED — add /config to apiPrefixes bypass list
+│   ├── static/css/tokens.css           # MODIFIED — add --warn / --warn-surface tokens
+│   └── static/js/screens/
+│       ├── splash.js                   # MODIFIED — fetch /config, render banner
+│       └── home.js                     # MODIFIED — same
 ├── ops/
-│   ├── backup/
-│   │   ├── Dockerfile                  # NEW — alpine + postgresql-client + rclone + crond
-│   │   ├── entrypoint.sh               # NEW — installs the cron, starts crond in foreground
-│   │   ├── nightly-backup.sh           # NEW — pg_dump, rotate local, push to B2
-│   │   └── rclone.conf.example         # NEW — template for B2 creds (real one is mounted from host)
 │   ├── disk-alert/
-│   │   ├── Dockerfile                  # NEW — alpine + curl + crond
-│   │   ├── entrypoint.sh               # NEW — cron-installer + crond
+│   │   ├── Dockerfile                  # NEW — alpine + curl + tini
+│   │   ├── entrypoint.sh               # NEW — cron-installer + crond, idle if NTFY_TOPIC unset
 │   │   └── check-disk.sh               # NEW — df check, ntfy POST if > threshold
-│   └── README.md                       # NEW — operator runbook (B2 setup, ntfy topic, Sentry DSN, UptimeRobot)
-├── docker-compose.prod.yml             # MODIFIED — add backup + disk-alert services, log-driver options on all services
-├── .env.example                        # MODIFIED — add SENTRY_DSN, SHOW_BETA_BANNER, B2 creds, ntfy topic
-└── pyproject.toml                      # MODIFIED — add sentry-sdk[fastapi]
+│   └── README.md                       # NEW — operator runbook (post-deploy checklist + manual steps)
+├── docker-compose.yml                  # MODIFIED — uvicorn --proxy-headers
+├── docker-compose.prod.yml             # MODIFIED — log-driver anchor on all services + disk-alert sidecar
+├── Dockerfile                          # MODIFIED — uvicorn --proxy-headers
+└── .env.example                        # MODIFIED — RATE_LIMIT_*, NTFY_TOPIC, DISK_ALERT_THRESHOLD, SHOW_BETA_BANNER
 ```
+
+**Note:** the `ops/backup/` subtree was originally planned but Task 2 was dropped during execution (Hetzner already takes VPS-level snapshots). `pyproject.toml` was NOT modified — Task 3 went with the in-house ntfy handler instead of adding `sentry-sdk`.
 
 ---
 
