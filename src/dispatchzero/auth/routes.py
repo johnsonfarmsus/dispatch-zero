@@ -12,7 +12,12 @@ from dispatchzero.auth.sessions import sign_session
 from dispatchzero.config import Settings, get_settings
 from dispatchzero.db import get_session
 from dispatchzero.models import User
-from dispatchzero.schemas.auth import LoginIn, MeOut, SignupIn
+from dispatchzero.schemas.auth import AdventureStyle, LoginIn, MeOut, SignupIn
+from pydantic import BaseModel
+
+
+class StyleIn(BaseModel):
+    adventure_style: AdventureStyle
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -133,6 +138,19 @@ async def logout(
         secure=settings.app_env == "production",
         samesite="lax",
     )
+
+
+@router.post("/style", response_model=MeOut)
+async def change_style(
+    payload: StyleIn,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> MeOut:
+    user.adventure_style = payload.adventure_style
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return await _user_to_me(db, user)
 
 
 @router.get("/me", response_model=MeOut)

@@ -100,6 +100,28 @@ async def test_me_returns_user_with_cookie(client, db_session, redis_client):
 
 
 @pytest.mark.asyncio
+async def test_change_style(client, db_session, redis_client):
+    await client.post("/auth/signup", json=SIGNUP_PAYLOAD)
+    r = await client.post("/auth/style", json={"adventure_style": "guild"})
+    assert r.status_code == 200, r.text
+    assert r.json()["adventure_style"] == "guild"
+
+
+@pytest.mark.asyncio
+async def test_change_style_requires_auth(client, db_session, redis_client):
+    client.cookies.clear()
+    r = await client.post("/auth/style", json={"adventure_style": "guild"})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_style_rejects_unknown_style(client, db_session, redis_client):
+    await client.post("/auth/signup", json=SIGNUP_PAYLOAD)
+    r = await client.post("/auth/style", json={"adventure_style": "ranger"})
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_logout_clears_cookie(client, db_session, redis_client):
     await client.post("/auth/signup", json=SIGNUP_PAYLOAD)
     r = await client.post("/auth/logout")
