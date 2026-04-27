@@ -17,6 +17,28 @@ _RE_ENTRY_DAYS = 90
 
 Source = Literal["overpass", "wikipedia"]
 
+# Safety filter: never direct users to places primarily occupied by minors.
+# Substring match (case-insensitive). False positives (e.g. "Old Schoolhouse
+# Museum") are an acceptable cost — we err on the side of exclusion.
+# Applied at ingestion (so excluded names never enter the DB) AND at the
+# eligibility filter (so anything already in the DB from prior runs is also
+# excluded — defense in depth).
+_NAME_EXCLUSIONS: tuple[str, ...] = (
+    "school",
+    "academy",
+    "elementary",
+    "kindergarten",
+    "preschool",
+    "daycare",
+)
+
+
+def _excluded_by_name(name: str | None) -> bool:
+    if not name:
+        return False
+    lowered = name.lower()
+    return any(token in lowered for token in _NAME_EXCLUSIONS)
+
 
 async def discover_nearby(
     *,
@@ -64,7 +86,9 @@ async def discover_nearby(
     eligible = [
         p
         for p in stored
-        if p.id not in recent_completed_ids and p.status == PlaceStatus.ACTIVE.value
+        if p.id not in recent_completed_ids
+        and p.status == PlaceStatus.ACTIVE.value
+        and not _excluded_by_name(p.name)
     ]
 
     scored = sorted(
@@ -103,7 +127,7 @@ async def _ingest_overpass(
         raw = await overpass.query_nearby(
             lat=lat, lng=lng, radius_m=radius_m, categories=cats, broad=broad,
         )
-        named = [p for p in raw if p.name]
+        named = [p for p in raw if p.name and not _excluded_by_name(p.name)]
         stored: list[Place] = []
         for op in named:
             place = await _upsert_overpass_place(db, op, wikidata)
@@ -125,7 +149,7 @@ async def _ingest_wikipedia(
     wp = WikipediaClient(redis)
     try:
         raw = await wp.geosearch(lat=lat, lng=lng, radius_m=radius_m, limit=20)
-        named = [p for p in raw if p.title]
+        named = [p for p in raw if p.title and not _excluded_by_name(p.title)]
         stored: list[Place] = []
         for wpp in named:
             place = await _upsert_wikipedia_place(db, wpp)

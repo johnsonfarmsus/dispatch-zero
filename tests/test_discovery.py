@@ -146,3 +146,50 @@ async def test_discover_filters_unnamed_places(db_session, redis_client):
         )
     assert len(results) == 1
     assert results[0]["name"] == "Has a Name"
+
+
+@pytest.mark.asyncio
+async def test_discover_excludes_schools_and_academies(db_session, redis_client):
+    """Safety filter: places named 'school', 'academy', etc. must be excluded —
+    even if OSM returns them. We do not direct users to facilities full of minors."""
+    user = await _make_user(db_session)
+    with respx.mock:
+        respx.post("https://overpass-api.de/api/interpreter").mock(
+            return_value=httpx.Response(
+                200,
+                json=_overpass_response_with(
+                    (1, "Reardan Elementary School", "mural"),
+                    (2, "Wilson Academy", "sculpture"),
+                    (3, "St. Mary's Kindergarten", "memorial"),
+                    (4, "Daycare Mural", "mural"),
+                    (5, "Old Town Mural", "mural"),  # the only legit one
+                ),
+            )
+        )
+        results = await discover_nearby(
+            db=db_session, redis=redis_client, user=user,
+            lat=37.7749, lng=-122.4194, radius_m=1000, limit=10,
+        )
+    names = [r["name"] for r in results]
+    assert names == ["Old Town Mural"]
+
+
+def test_excluded_by_name_predicate():
+    """Unit-level coverage of the safety predicate. Substring, case-insensitive."""
+    from dispatchzero.services.discovery import _excluded_by_name
+
+    # Hits — should be excluded
+    assert _excluded_by_name("Reardan Elementary School")
+    assert _excluded_by_name("Wilson Academy")
+    assert _excluded_by_name("ST MARY'S KINDERGARTEN")
+    assert _excluded_by_name("Sunny Day Daycare")
+    assert _excluded_by_name("Tiny Tots Preschool")
+    assert _excluded_by_name("Lincoln Elementary")  # without "school" suffix
+    # Misses — should pass through
+    assert not _excluded_by_name("Old Town Mural")
+    assert not _excluded_by_name("Riverfront Park")
+    assert not _excluded_by_name(None)
+    assert not _excluded_by_name("")
+    # Acceptable false positive — better to skip a museum than risk pointing
+    # someone at a former-schoolhouse-still-being-used-as-a-school
+    assert _excluded_by_name("Old Schoolhouse Museum")
