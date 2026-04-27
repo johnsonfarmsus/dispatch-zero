@@ -88,6 +88,50 @@ async def test_full_flow_request_capture_rate(
 
 
 @pytest.mark.asyncio
+async def test_request_falls_through_overpass_timeout_to_wikipedia(
+    client, db_session, redis_client, tmp_path, monkeypatch,
+):
+    """If Overpass times out, /missions/request should escalate to Wikipedia
+    rather than 500ing. Models the rural-area path where OSM is also empty."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "gpt-oss:120b")
+    monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
+
+    await client.post("/auth/signup", json=SIGNUP)
+
+    wp_geo = {"query": {"geosearch": [
+        {"pageid": 555, "title": "Harrington Opera House", "lat": 47.4810, "lon": -118.2540},
+    ]}}
+    wp_extracts = {"query": {"pages": {"555": {
+        "pageid": 555, "extract": "The Harrington Opera House is a historic building.",
+    }}}}
+
+    with respx.mock:
+        # All Overpass POSTs time out — every overpass tier should be skipped.
+        respx.post("https://overpass-api.de/api/interpreter").mock(
+            side_effect=httpx.ReadTimeout("overpass timed out")
+        )
+        # Wikipedia returns one named, non-populated-place landmark.
+        respx.get("https://en.wikipedia.org/w/api.php").mock(
+            side_effect=[
+                httpx.Response(200, json=wp_geo),
+                httpx.Response(200, json=wp_extracts),
+            ]
+        )
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ollama_payload())
+        )
+
+        r = await client.post("/missions/request", json={
+            "lat": 47.4808, "lng": -118.2547, "radius_m": 2000,
+        })
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["place"]["name"] == "Harrington Opera House"
+
+
+@pytest.mark.asyncio
 async def test_capture_returns_422_for_out_of_radius(
     client, db_session, redis_client, tmp_path, monkeypatch,
 ):

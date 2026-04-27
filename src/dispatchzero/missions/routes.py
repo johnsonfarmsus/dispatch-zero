@@ -1,10 +1,14 @@
+import logging
 import uuid
 from typing import Annotated
 
+import httpx
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+log = logging.getLogger(__name__)
 
 from dispatchzero.auth.deps import current_user
 from dispatchzero.config import Settings, get_settings
@@ -159,11 +163,20 @@ async def request_mission(
         if key in seen:
             continue
         seen.add(key)
-        places = await discover_nearby(
-            db=db, redis=redis, user=user,
-            lat=payload.lat, lng=payload.lng,
-            radius_m=radius_m, limit=1, broad=broad, source=source,
-        )
+        try:
+            places = await discover_nearby(
+                db=db, redis=redis, user=user,
+                lat=payload.lat, lng=payload.lng,
+                radius_m=radius_m, limit=1, broad=broad, source=source,
+            )
+        except httpx.HTTPError as e:
+            # Transient upstream failure (timeout, connection reset, etc.)
+            # Don't kill the whole request — let the next tier try.
+            log.warning(
+                "discover tier failed (radius=%dm source=%s broad=%s): %s",
+                radius_m, source, broad, e,
+            )
+            places = []
         if places:
             break
 
