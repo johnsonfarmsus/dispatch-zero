@@ -6,6 +6,7 @@ import { splash } from "./screens/splash.js";
 import { signup } from "./screens/signup.js";
 import { login } from "./screens/login.js";
 import { home } from "./screens/home.js";
+import { stylePicker } from "./screens/style-picker.js";
 
 const root = document.getElementById("app");
 
@@ -34,6 +35,7 @@ async function bootstrap() {
   defineRoute("/", () => (getUser() ? home() : anonLanding()));
   defineRoute("/signup", () => signup());
   defineRoute("/login", () => login());
+  defineRoute("/style", () => stylePicker());
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
   init(root);
