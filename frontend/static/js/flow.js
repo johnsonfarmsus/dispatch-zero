@@ -61,7 +61,11 @@ export function onFix(fn) {
   return () => _fixListeners.delete(fn);
 }
 
-export async function getFreshFix({ maxAgeMs = 5000 } = {}) {
+export async function getFreshFix({
+  maxAgeMs = 5000,
+  enableHighAccuracy = true,
+  timeoutMs = 15000,
+} = {}) {
   if (_lastFix && (Date.now() - _lastFix.ts) < maxAgeMs) return _lastFix;
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -80,7 +84,7 @@ export async function getFreshFix({ maxAgeMs = 5000 } = {}) {
         resolve(fix);
       },
       (err) => reject(err),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      { enableHighAccuracy, timeout: timeoutMs, maximumAge: 0 },
     );
   });
 }

@@ -81,7 +81,13 @@ export async function home() {
     requestStatus.style.color = "var(--text-muted)";
     requestStatus.textContent = "Acquiring fix…";
     try {
-      const fix = await getFreshFix({ maxAgeMs: 30000 });
+      // Coarse fix is fine here — we just need to know the neighborhood
+      // to find places within 2km. Capture screen uses high accuracy.
+      const fix = await getFreshFix({
+        maxAgeMs: 60000,
+        enableHighAccuracy: false,
+        timeoutMs: 30000,
+      });
       requestStatus.textContent = "Acquiring target…";
       const r = await api.post("/missions/request", {
         lat: fix.lat,
@@ -97,15 +103,24 @@ export async function home() {
       throw new Error(r.data?.detail || "Dispatch line is unreliable.");
     } catch (e) {
       requestStatus.style.color = "var(--danger)";
-      const msg = e.message || "Dispatch failed.";
-      if (e.code === e.PERMISSION_DENIED || /denied|geolocation/i.test(msg)) {
-        requestStatus.textContent = "Location permission required, agent.";
+      // GeolocationPositionError has numeric .code AND a PERMISSION_DENIED constant
+      // on the instance — that's how we tell it apart from a generic Error.
+      if (e && typeof e.code === "number" && typeof e.PERMISSION_DENIED === "number") {
+        if (e.code === 1) {
+          requestStatus.textContent = "Location access denied. Allow location in your browser settings.";
+        } else if (e.code === 2) {
+          requestStatus.textContent = "GPS unavailable here. Try outdoors and try again.";
+        } else if (e.code === 3) {
+          requestStatus.textContent = "GPS fix timed out. Try again, agent.";
+        } else {
+          requestStatus.textContent = `Location error (${e.code}): ${e.message || "unknown"}`;
+        }
       } else if (e.status === 404) {
         requestStatus.textContent = "No eligible targets within 2 km.";
       } else if (e.status === 503) {
         requestStatus.textContent = "Dispatch line is unreliable. Try again.";
       } else {
-        requestStatus.textContent = msg;
+        requestStatus.textContent = e.message || "Dispatch failed.";
       }
       requestBtn.disabled = false;
     }
