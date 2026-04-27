@@ -116,7 +116,8 @@ export async function home() {
           requestStatus.textContent = `Location error (${e.code}): ${e.message || "unknown"}`;
         }
       } else if (e.status === 404) {
-        requestStatus.textContent = "No eligible targets within 2 km.";
+        requestStatus.textContent =
+          "No eligible targets within reach. Try a town with more landmarks, agent.";
       } else if (e.status === 503) {
         requestStatus.textContent = "Dispatch line is unreliable. Try again.";
       } else {
