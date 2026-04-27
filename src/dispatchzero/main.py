@@ -29,8 +29,11 @@ async def healthz() -> dict[str, str]:
 
 
 @app.get("/config")
-async def public_config() -> dict:
-    """Public, unauthenticated config the frontend may need to render."""
+async def public_config() -> dict[str, bool]:
+    """Public, unauthenticated config the frontend may need at render time.
+
+    Append new public flags here rather than creating additional config endpoints.
+    """
     s = get_settings()
     return {
         "show_beta_banner": s.show_beta_banner,

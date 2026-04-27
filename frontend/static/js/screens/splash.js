@@ -2,8 +2,8 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 
 const BANNER_STYLE = {
-  backgroundColor: "var(--surface-warn, #3a2a0a)",
-  color: "var(--text-warn, #f4d35e)",
+  backgroundColor: "var(--warn-surface)",
+  color: "var(--warn)",
   padding: "var(--s-1)",
   textAlign: "center",
   fontFamily: "var(--font-mono)",

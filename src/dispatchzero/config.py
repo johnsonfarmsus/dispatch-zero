@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     ntfy_topic: str | None = None
 
     # Public toggle: BETA banner on Splash + Home (flip false for public launch).
+    # Tip: omit the var entirely to default False. Do NOT set `SHOW_BETA_BANNER=`
+    # (empty string) — pydantic-settings v2 rejects that as a bool and the app
+    # would fail to start.
     show_beta_banner: bool = False
 
 
