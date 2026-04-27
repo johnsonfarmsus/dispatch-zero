@@ -17,6 +17,7 @@ FROM base AS prod
 RUN uv sync --frozen --no-dev
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
+COPY frontend ./frontend
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 CMD ["uvicorn", "dispatchzero.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -26,6 +27,7 @@ FROM base AS test
 RUN uv sync --frozen
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
+COPY frontend ./frontend
 COPY tests ./tests
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["pytest", "-v"]

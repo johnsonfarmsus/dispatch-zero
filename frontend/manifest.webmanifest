@@ -1,0 +1,12 @@
+{
+  "name": "Dispatch Zero",
+  "short_name": "Dispatch Zero",
+  "description": "Field assignments from Zero.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0c0a",
+  "theme_color": "#0e0c0a",
+  "icons": [
+    { "src": "/static/avatars/zero-agency.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
