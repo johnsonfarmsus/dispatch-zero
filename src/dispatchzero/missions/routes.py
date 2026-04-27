@@ -1,18 +1,67 @@
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import redis.asyncio as aioredis
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.auth.deps import current_user
+from dispatchzero.config import Settings, get_settings
 from dispatchzero.db import get_session
-from dispatchzero.models import User
+from dispatchzero.models import Completion, Mission, Place, User
+from dispatchzero.schemas.completions import (
+    CompletionOut,
+    DebriefOut,
+    MissionRequestIn,
+    RateIn,
+)
 from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut
+from dispatchzero.services.discovery import discover_nearby
+from dispatchzero.services.mission_flow import (
+    CaptureFailedError,
+    capture_mission,
+    rate_completion,
+    user_completions_count,
+)
 from dispatchzero.services.missions import (
     MissionGenerationError,
     get_or_generate_mission,
 )
 
 router = APIRouter(prefix="/missions", tags=["missions"])
+
+
+async def _get_redis(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> aioredis.Redis:
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
+
+
+def _mission_to_out(mission: Mission) -> MissionOut:
+    return MissionOut(
+        id=mission.id,
+        place_id=mission.place_id,
+        adventure_style=mission.adventure_style,
+        dispatch_summary=mission.dispatch_summary,
+        briefing_text=mission.briefing_text,
+        clue=mission.clue,
+        badge_framing=mission.badge_framing,
+        audio_url=mission.audio_url,
+        ai_model=mission.ai_model,
+        status=mission.status,
+    )
+
+
+def _completion_to_out(c: Completion) -> CompletionOut:
+    return CompletionOut(
+        id=c.id,
+        mission_id=c.mission_id,
+        place_id=c.place_id,
+        verified=c.verified,
+        photo_url=c.photo_url,
+        completed_at=c.completed_at.isoformat(),
+    )
 
 
 @router.post("/generate", response_model=MissionOut)
@@ -29,23 +78,121 @@ async def generate(
             adventure_style=payload.adventure_style,
         )
     except MissionGenerationError as e:
-        msg = str(e).lower()
-        if "not found" in msg:
+        if "not found" in str(e).lower():
             raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
         ) from e
+    return _mission_to_out(mission)
 
-    return MissionOut(
-        id=mission.id,
-        place_id=mission.place_id,
-        adventure_style=mission.adventure_style,
-        dispatch_summary=mission.dispatch_summary,
-        briefing_text=mission.briefing_text,
-        clue=mission.clue,
-        badge_framing=mission.badge_framing,
-        audio_url=mission.audio_url,
-        ai_model=mission.ai_model,
-        status=mission.status,
+
+@router.post("/request", response_model=MissionOut)
+async def request_mission(
+    payload: MissionRequestIn,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
+) -> MissionOut:
+    """Combined: discover nearby places, pick top, generate mission."""
+    places = await discover_nearby(
+        db=db, redis=redis, user=user,
+        lat=payload.lat, lng=payload.lng, radius_m=payload.radius_m, limit=1,
     )
+    if not places:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no eligible places nearby")
+    place_id = places[0]["id"]
+    try:
+        mission = await get_or_generate_mission(
+            db=db, user=user, place_id=place_id,
+            adventure_style=payload.adventure_style,
+        )
+    except MissionGenerationError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "the dispatch line is unreliable, agent — try again",
+        ) from e
+    return _mission_to_out(mission)
+
+
+@router.post("/{mission_id}/accept", status_code=status.HTTP_204_NO_CONTENT)
+async def accept_mission(
+    mission_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """v1: no-op success. Validates mission exists so the client gets a clean 404."""
+    m = (await db.execute(select(Mission).where(Mission.id == mission_id))).scalar_one_or_none()
+    if m is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "mission not found")
+
+
+@router.post("/{mission_id}/capture", response_model=DebriefOut)
+async def capture(
+    mission_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+    photo: UploadFile = File(...),
+    lat: float = Form(...),
+    lng: float = Form(...),
+    accuracy_m: float | None = Form(None),
+) -> DebriefOut:
+    mission = (
+        await db.execute(select(Mission).where(Mission.id == mission_id))
+    ).scalar_one_or_none()
+    if mission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "mission not found")
+    place = (
+        await db.execute(select(Place).where(Place.id == mission.place_id))
+    ).scalar_one()
+
+    raw = await photo.read()
+    if not raw:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty photo upload")
+
+    try:
+        completion = await capture_mission(
+            db=db, user=user, mission=mission, place=place,
+            raw_photo=raw,
+            capture_lat=lat, capture_lng=lng, capture_accuracy_m=accuracy_m,
+        )
+    except CaptureFailedError as e:
+        # In-character: don't leak whether GPS or EXIF failed
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "the proof is not yet sufficient, agent — try again",
+        ) from e
+
+    refreshed = (await db.execute(select(User).where(User.id == user.id))).scalar_one()
+    count = await user_completions_count(db, user_id=user.id)
+    return DebriefOut(
+        completion=_completion_to_out(completion),
+        user_completions_count=count,
+        user_missions_this_week=refreshed.missions_this_week,
+    )
+
+
+@router.post("/completions/{completion_id}/rate", response_model=CompletionOut)
+async def rate(
+    completion_id: uuid.UUID,
+    payload: RateIn,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> CompletionOut:
+    completion = (
+        await db.execute(select(Completion).where(Completion.id == completion_id))
+    ).scalar_one_or_none()
+    if completion is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "completion not found")
+    if completion.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your completion")
+
+    await rate_completion(
+        db=db, user=user, completion=completion,
+        location_rating=payload.location_rating,
+        mission_rating=payload.mission_rating,
+        location_reason=payload.location_reason,
+    )
+    return _completion_to_out(completion)
