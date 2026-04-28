@@ -7,7 +7,7 @@ export function securityProtocols() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— protocols"),
     ),
-    el("div", { class: "content stack",
+    el("div", { class: "content stack scrollable",
                  style: { gap: "var(--s-4)", paddingBottom: "var(--s-6)" } },
       el("div", { class: "subtitle" }, "DECLASSIFIED · INTERNAL"),
       el("div", { class: "title", style: { fontSize: "var(--t-2xl)" } },
