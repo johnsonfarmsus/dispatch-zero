@@ -14,6 +14,7 @@ from dispatchzero.db import get_session
 from dispatchzero.models import User
 from dispatchzero.ratelimit import RateLimitExceeded, check_and_increment
 from dispatchzero.schemas.auth import AdventureStyle, LoginIn, MeOut, SignupIn
+from dispatchzero.services.rank import completions_to_rank
 from pydantic import BaseModel
 
 
@@ -57,12 +58,14 @@ async def _user_to_me(db: AsyncSession, user: User) -> MeOut:
         ).scalar_one()
     except Exception:
         count = 0
+    completions = int(count)
     return MeOut(
         id=user.id,
         callsign=user.callsign,
         adventure_style=user.adventure_style,
-        completions_count=int(count),
+        completions_count=completions,
         missions_this_week=user.missions_this_week,
+        rank=completions_to_rank(completions),
     )
 
 

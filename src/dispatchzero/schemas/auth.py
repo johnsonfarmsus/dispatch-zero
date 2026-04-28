@@ -28,3 +28,6 @@ class MeOut(BaseModel):
     adventure_style: str
     completions_count: int = 0
     missions_this_week: int = 0
+    # Integer rank 0..10 derived from completions_count; the rank NAME is
+    # rendered on the frontend per adventure_style.
+    rank: int = 0

@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import { setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
 import { getFreshFix, clearMissionCache, clearLastDebrief } from "../flow.js";
-import { styleMeta } from "../style-meta.js";
+import { styleMeta, rankName } from "../style-meta.js";
 
 export async function home() {
   const r = await api.get("/auth/me");
@@ -47,6 +47,11 @@ export async function home() {
       ),
       el("div", { class: "divider" }),
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
+        el("div", { class: "row", style: { justifyContent: "space-between" } },
+          el("span", { class: "subtitle" }, "Rank"),
+          el("span", { class: "code", style: { fontSize: "var(--t-lg)" } },
+            rankName(user.adventure_style, user.rank)),
+        ),
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "Completions"),
           el("span", { class: "code", style: { fontSize: "var(--t-2xl)" } },
