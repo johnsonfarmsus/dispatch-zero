@@ -1,10 +1,12 @@
 import logging
 import uuid
+from pathlib import Path
 from typing import Annotated
 
 import httpx
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,7 @@ from dispatchzero.schemas.completions import (
     RateIn,
 )
 from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut, PlaceMini
+from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.discovery import discover_nearby
 from dispatchzero.services.mission_flow import (
     CaptureFailedError,
@@ -97,6 +100,7 @@ def _completion_to_out(c: Completion) -> CompletionOut:
         verified=c.verified,
         photo_url=c.photo_url,
         completed_at=c.completed_at.isoformat(),
+        share_token=c.share_token,
     )
 
 
@@ -328,3 +332,53 @@ async def rate(
         location_reason=payload.location_reason,
     )
     return _completion_to_out(completion)
+
+
+@router.get("/completions/{completion_id}/card.jpg")
+async def completion_card(
+    completion_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> FileResponse:
+    """Return the 4:5 mission card JPEG for the user's own completion.
+
+    Generated at capture time; regenerated on demand if missing on disk
+    (e.g. an older completion or a card-gen failure during capture).
+    """
+    completion = (
+        await db.execute(select(Completion).where(Completion.id == completion_id))
+    ).scalar_one_or_none()
+    if completion is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "completion not found")
+    if completion.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your completion")
+
+    settings = get_settings()
+    card_path = Path(settings.photo_upload_dir) / "cards" / f"{completion.id}.jpg"
+    if not card_path.exists():
+        # Regenerate on miss. Need place + mission + user to compose.
+        mission = (
+            await db.execute(select(Mission).where(Mission.id == completion.mission_id))
+        ).scalar_one()
+        place = (
+            await db.execute(select(Place).where(Place.id == completion.place_id))
+        ).scalar_one()
+        photo_path = Path(completion.photo_url) if completion.photo_url else None
+        if photo_path is None or not photo_path.exists():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
+        try:
+            compose_mission_card(
+                photo_path=photo_path,
+                place_name=place.name or "Unmarked target",
+                callsign=user.callsign,
+                completed_at=completion.completed_at,
+                adventure_style=mission.adventure_style,
+                output_path=card_path,
+            )
+        except Exception as e:
+            log.warning("card regen failed completion_id=%s: %s", completion_id, e)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "card unavailable"
+            ) from e
+
+    return FileResponse(card_path, media_type="image/jpeg")

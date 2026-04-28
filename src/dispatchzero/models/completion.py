@@ -56,3 +56,7 @@ class Completion(Base):
     completed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # Unguessable short token used in the public share URL `/c/{share_token}`.
+    # Generated on insert (see services.mission_flow.capture_mission).
+    share_token: Mapped[str] = mapped_column(String(12), nullable=False, unique=True)

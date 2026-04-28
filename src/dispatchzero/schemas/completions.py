@@ -20,6 +20,7 @@ class CompletionOut(BaseModel):
     verified: bool
     photo_url: str | None
     completed_at: str  # ISO 8601
+    share_token: str
 
 
 class DebriefOut(BaseModel):

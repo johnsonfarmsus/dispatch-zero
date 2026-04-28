@@ -224,9 +224,11 @@ async def test_rate_rejects_someone_elses_completion(
         dispatch_summary="x", briefing_text="y",
     )
     db_session.add(mission); await db_session.commit(); await db_session.refresh(mission)
+    import secrets
     completion = Completion(
         user_id=user_a.id, mission_id=mission.id, place_id=place.id,
         capture_lat=47.6605, capture_lng=-117.4198, verified=True,
+        share_token=secrets.token_urlsafe(7),
     )
     db_session.add(completion); await db_session.commit(); await db_session.refresh(completion)
 

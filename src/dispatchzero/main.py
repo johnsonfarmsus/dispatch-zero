@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from dispatchzero.auth.routes import router as auth_router
 from dispatchzero.missions.routes import router as missions_router
 from dispatchzero.places.routes import router as places_router
+from dispatchzero.share.routes import router as share_router
 
 app = FastAPI(title="Dispatch Zero")
 
@@ -14,6 +15,7 @@ app = FastAPI(title="Dispatch Zero")
 app.include_router(auth_router)
 app.include_router(places_router)
 app.include_router(missions_router)
+app.include_router(share_router)
 
 
 @app.get("/healthz")

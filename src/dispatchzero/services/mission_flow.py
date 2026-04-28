@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from dispatchzero.models import (
     User,
     UserPlaceHistory,
 )
+from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.photo import save_thumbnail
 from dispatchzero.services.verification import verify_capture
 
@@ -61,6 +63,23 @@ async def capture_mission(
         quality=settings.photo_jpeg_quality,
     )
 
+    # Compose the shareable mission card. Done synchronously at capture so the
+    # Debrief screen's "Save card" is instant. Failure here doesn't fail the
+    # capture — log and skip; the card endpoint will regenerate on demand.
+    card_path = Path(settings.photo_upload_dir) / "cards" / f"{completion_id}.jpg"
+    try:
+        compose_mission_card(
+            photo_path=photo_path,
+            place_name=place.name or "Unmarked target",
+            callsign=user.callsign,
+            completed_at=datetime.now(timezone.utc),
+            adventure_style=mission.adventure_style,
+            output_path=card_path,
+        )
+    except Exception:
+        # Card generation is best-effort. The completion still saves.
+        pass
+
     completion = Completion(
         id=completion_id,
         user_id=user.id,
@@ -74,6 +93,8 @@ async def capture_mission(
         exif_datetime_delta_seconds=result.exif_delta_seconds,
         had_exif_gps=result.had_exif_gps,
         verified=True,
+        # Unguessable short token for the public /c/{token} share URL.
+        share_token=secrets.token_urlsafe(7),
     )
     db.add(completion)
 

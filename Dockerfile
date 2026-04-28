@@ -5,6 +5,11 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
+# fonts-dejavu-core for mission-card composition (Pillow needs a TTF on disk)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 
 WORKDIR /app

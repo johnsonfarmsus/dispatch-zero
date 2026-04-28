@@ -123,11 +123,13 @@ async def test_auto_retire_fires_on_three_of_five_negatives(
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
     # Manually seed 5 prior rated completions: 3 down, 2 up
+    import secrets
     for rating in ["down", "up", "down", "up", "down"]:
         c = Completion(
             user_id=user.id, mission_id=mission.id, place_id=place.id,
             capture_lat=47.6605, capture_lng=-117.4198,
             verified=True, location_rating=rating,
+            share_token=secrets.token_urlsafe(7),
         )
         db_session.add(c)
     await db_session.commit()
