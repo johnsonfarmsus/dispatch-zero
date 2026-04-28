@@ -18,6 +18,7 @@ from dispatchzero.db import get_session
 from dispatchzero.models import Completion, Mission, Place, User
 from dispatchzero.ratelimit import RateLimitExceeded, check_and_increment
 from dispatchzero.schemas.completions import (
+    CompletionListItem,
     CompletionOut,
     DebriefOut,
     MissionRequestIn,
@@ -231,6 +232,97 @@ async def request_mission(
         ) from e
     place = await _fetch_place(db, mission.place_id)
     return await _mission_to_out(db, mission, place)
+
+
+# History dossier — list of the user's recent completions and the per-completion
+# detail used by the Dossier screens. Declared BEFORE /{mission_id} so the
+# router doesn't try to interpret "completions" as a mission UUID.
+_HISTORY_LIMIT = 50
+
+
+@router.get("/completions", response_model=list[CompletionListItem])
+async def list_completions(
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> list[CompletionListItem]:
+    """Return the user's most recent completions, newest first."""
+    rows = (
+        await db.execute(
+            select(Completion, Place, Mission)
+            .join(Place, Place.id == Completion.place_id)
+            .join(Mission, Mission.id == Completion.mission_id)
+            .where(Completion.user_id == user.id)
+            .order_by(Completion.completed_at.desc())
+            .limit(_HISTORY_LIMIT)
+        )
+    ).all()
+    return [
+        CompletionListItem(
+            id=c.id,
+            place_id=p.id,
+            place_name=p.name,
+            place_category=p.category,
+            completed_at=c.completed_at.isoformat(),
+            share_token=c.share_token,
+            badge_framing=m.badge_framing,
+            adventure_style=m.adventure_style,
+        )
+        for c, p, m in rows
+    ]
+
+
+@router.get("/completions/{completion_id}", response_model=CompletionListItem)
+async def get_completion(
+    completion_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> CompletionListItem:
+    """Single completion detail — owner only. Same shape as list items."""
+    row = (
+        await db.execute(
+            select(Completion, Place, Mission)
+            .join(Place, Place.id == Completion.place_id)
+            .join(Mission, Mission.id == Completion.mission_id)
+            .where(Completion.id == completion_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "completion not found")
+    c, p, m = row
+    if c.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your completion")
+    return CompletionListItem(
+        id=c.id,
+        place_id=p.id,
+        place_name=p.name,
+        place_category=p.category,
+        completed_at=c.completed_at.isoformat(),
+        share_token=c.share_token,
+        badge_framing=m.badge_framing,
+        adventure_style=m.adventure_style,
+    )
+
+
+@router.get("/completions/{completion_id}/photo.jpg")
+async def completion_photo(
+    completion_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> FileResponse:
+    """Serve the saved 600px capture as a small thumbnail for list views."""
+    completion = (
+        await db.execute(select(Completion).where(Completion.id == completion_id))
+    ).scalar_one_or_none()
+    if completion is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "completion not found")
+    if completion.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "not your completion")
+    if not completion.photo_url:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
+    photo_path = Path(completion.photo_url)
+    if not photo_path.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
+    return FileResponse(photo_path, media_type="image/jpeg")
 
 
 @router.get("/{mission_id}", response_model=MissionOut)

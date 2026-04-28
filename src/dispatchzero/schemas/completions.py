@@ -33,3 +33,21 @@ class RateIn(BaseModel):
     location_rating: Literal["up", "down"] | None = None
     mission_rating: Literal["up", "down"] | None = None
     location_reason: LocationReason | None = None
+
+
+class CompletionListItem(BaseModel):
+    """A single row in the user's history dossier.
+
+    Carries everything needed to render the list (place name, date) AND to
+    drive the per-completion detail view (id + share_token for Save Card and
+    Copy Share Text actions). Mission's badge_framing is pulled along so the
+    detail screen can show what was earned.
+    """
+    id: uuid.UUID
+    place_id: uuid.UUID
+    place_name: str | None
+    place_category: str
+    completed_at: str  # ISO 8601
+    share_token: str
+    badge_framing: str | None
+    adventure_style: str

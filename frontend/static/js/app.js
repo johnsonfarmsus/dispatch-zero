@@ -14,6 +14,8 @@ import { transit as missionTransit } from "./screens/mission/transit.js";
 import { capture as missionCapture } from "./screens/mission/capture.js";
 import { debrief as missionDebrief } from "./screens/mission/debrief.js";
 import { rate as missionRate } from "./screens/mission/rate.js";
+import { history } from "./screens/history.js";
+import { historyDetail } from "./screens/history-detail.js";
 
 const root = document.getElementById("app");
 
@@ -50,6 +52,8 @@ async function bootstrap() {
   defineRoute("/mission/:id/capture", (p) => missionCapture(p));
   defineRoute("/mission/:id/debrief", (p) => missionDebrief(p));
   defineRoute("/completions/:id/rate", (p) => missionRate(p));
+  defineRoute("/history", () => history());
+  defineRoute("/history/:id", (p) => historyDetail(p));
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
   init(root);

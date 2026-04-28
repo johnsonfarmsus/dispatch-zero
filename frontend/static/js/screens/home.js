@@ -15,7 +15,7 @@ export async function home() {
   const user = r.data;
   setUser(user);
 
-  const logoutLink = el("a", { href: "#", class: "muted" }, "Stand down");
+  const logoutLink = el("a", { href: "#", class: "muted" }, "Stand Down");
   const requestBtn = el("button", { class: "primary" }, "Request Dispatch");
   const requestStatus = el("div", {
     class: "muted mono",
@@ -64,7 +64,8 @@ export async function home() {
       ),
       el("div", { class: "divider" }),
       el("div", { class: "row", style: { justifyContent: "space-between" } },
-        el("a", { href: "/style", "data-route": true, class: "muted" }, "Change organization"),
+        el("a", { href: "/history", "data-route": true, class: "muted" }, "Dossier"),
+        el("a", { href: "/style", "data-route": true, class: "muted" }, "Change Organization"),
         logoutLink,
       ),
     ),
