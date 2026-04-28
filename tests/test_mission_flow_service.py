@@ -48,7 +48,6 @@ async def test_capture_happy_path_persists_completion(db_session, tmp_path, monk
         capture_lat=47.6605, capture_lng=-117.4198, capture_accuracy_m=8.0,
     )
     assert completion.verified is True
-    assert completion.had_exif is True
     assert completion.photo_url is not None
 
     refreshed = (await db_session.execute(select(User).where(User.id == user.id))).scalar_one()
@@ -127,7 +126,6 @@ async def test_auto_retire_fires_on_three_of_five_negatives(
     for rating in ["down", "up", "down", "up", "down"]:
         c = Completion(
             user_id=user.id, mission_id=mission.id, place_id=place.id,
-            capture_lat=47.6605, capture_lng=-117.4198,
             verified=True, location_rating=rating,
             share_token=secrets.token_urlsafe(7),
         )

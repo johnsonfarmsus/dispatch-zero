@@ -58,7 +58,6 @@ async def _seed_completions(db_session, tmp_path, *, count: int = 3) -> User:
         c = Completion(
             user_id=user.id, mission_id=mission.id, place_id=place.id,
             photo_url=str(photo_path),
-            capture_lat=47.6605, capture_lng=-117.4198,
             verified=True,
             share_token=secrets.token_urlsafe(7),
             completed_at=base + timedelta(hours=i),
@@ -110,7 +109,6 @@ async def test_list_completions_returns_own_only(
     c = Completion(
         user_id=me.id, mission_id=mission.id, place_id=place.id,
         photo_url="/tmp/missing.jpg",  # not used by list
-        capture_lat=47.6605, capture_lng=-117.4198,
         verified=True,
         share_token=secrets.token_urlsafe(7),
         completed_at=datetime(2026, 4, 27, 12, tzinfo=timezone.utc),
@@ -194,7 +192,6 @@ async def test_completion_photo_serves_jpeg(
     completion = Completion(
         user_id=me.id, mission_id=mission.id, place_id=place.id,
         photo_url=str(photo_path),
-        capture_lat=47.0, capture_lng=-117.0,
         verified=True,
         share_token=secrets.token_urlsafe(7),
     )

@@ -86,12 +86,6 @@ async def capture_mission(
         mission_id=mission.id,
         place_id=place.id,
         photo_url=str(photo_path),
-        capture_lat=capture_lat,
-        capture_lng=capture_lng,
-        capture_accuracy_m=capture_accuracy_m,
-        had_exif=result.had_exif,
-        exif_datetime_delta_seconds=result.exif_delta_seconds,
-        had_exif_gps=result.had_exif_gps,
         verified=True,
         # Unguessable short token for the public /c/{token} share URL.
         share_token=secrets.token_urlsafe(7),

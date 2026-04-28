@@ -49,7 +49,6 @@ async def _seed_completion(db_session, tmp_path, *, style: str = "agency"):
     completion = Completion(
         user_id=user.id, mission_id=mission.id, place_id=place.id,
         photo_url=str(photo_path),
-        capture_lat=47.6605, capture_lng=-117.4198,
         verified=True,
         share_token=token,
         completed_at=datetime(2026, 4, 27, 12, tzinfo=timezone.utc),

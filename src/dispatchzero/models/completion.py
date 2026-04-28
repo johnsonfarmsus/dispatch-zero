@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,14 +39,9 @@ class Completion(Base):
     )
 
     photo_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
-    capture_lat: Mapped[float] = mapped_column(Float, nullable=False)
-    capture_lng: Mapped[float] = mapped_column(Float, nullable=False)
-    capture_accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    had_exif: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    exif_datetime_delta_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    had_exif_gps: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-
+    # Verification *outcome* is persisted; the inputs (capture lat/lng/accuracy
+    # and EXIF metadata) are used live in verify_capture and discarded.
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     location_rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
