@@ -72,6 +72,11 @@ export async function home() {
     el("div", { class: "actions" },
       requestBtn,
       requestStatus,
+      el("a", {
+        href: "/security", "data-route": true, class: "muted mono",
+        style: { textAlign: "center", fontSize: "var(--t-xs)",
+                 letterSpacing: "0.05em", padding: "var(--s-2)" },
+      }, "// SECURITY PROTOCOLS //"),
     ),
   );
 

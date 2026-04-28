@@ -16,6 +16,7 @@ import { debrief as missionDebrief } from "./screens/mission/debrief.js";
 import { rate as missionRate } from "./screens/mission/rate.js";
 import { history } from "./screens/history.js";
 import { historyDetail } from "./screens/history-detail.js";
+import { securityProtocols } from "./screens/security-protocols.js";
 
 const root = document.getElementById("app");
 
@@ -54,6 +55,7 @@ async function bootstrap() {
   defineRoute("/completions/:id/rate", (p) => missionRate(p));
   defineRoute("/history", () => history());
   defineRoute("/history/:id", (p) => historyDetail(p));
+  defineRoute("/security", () => securityProtocols());
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
   init(root);
@@ -75,6 +77,14 @@ function anonLanding() {
       el("div", { class: "title" }, "No active credentials."),
       el("div", { class: "muted" }, "Sign up to request your first dispatch, agent."),
     ),
-    el("div", { class: "actions" }, goSignup, goLogin),
+    el("div", { class: "actions" },
+      goSignup,
+      goLogin,
+      el("a", {
+        href: "/security", "data-route": true, class: "muted mono",
+        style: { textAlign: "center", fontSize: "var(--t-xs)",
+                 letterSpacing: "0.05em", padding: "var(--s-2)" },
+      }, "// SECURITY PROTOCOLS //"),
+    ),
   );
 }
