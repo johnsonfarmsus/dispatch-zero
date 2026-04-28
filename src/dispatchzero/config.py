@@ -39,9 +39,6 @@ class Settings(BaseSettings):
     rate_limit_mission_generate_per_day: int = 50
     rate_limit_signup_per_ip_per_hour: int = 10
 
-    # Error/disk push alerts via ntfy.sh. Unset = no-op (dev/local).
-    ntfy_topic: str | None = None
-
     # Public toggle: BETA banner on Splash + Home (flip false for public launch).
     # Tip: omit the var entirely to default False. Do NOT set `SHOW_BETA_BANNER=`
     # (empty string) — pydantic-settings v2 rejects that as a bool and the app

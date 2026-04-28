@@ -40,19 +40,6 @@ services:
     logging: *default-logging
     ports: !reset []   # internal only
 
-  disk-alert:
-    build: ./ops/disk-alert
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      NTFY_TOPIC: ${NTFY_TOPIC:-}
-      DISK_ALERT_THRESHOLD: ${DISK_ALERT_THRESHOLD:-85}
-    volumes:
-      # Read-only mount of host root so we can df the actual host filesystem,
-      # not the container's. /etc/hostname so we report the host's name in alerts.
-      - /:/host:ro
-      - /etc/hostname:/etc/host_hostname:ro
-
 volumes:
   caddy_data:
   caddy_config:
