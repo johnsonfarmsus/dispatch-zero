@@ -7,7 +7,7 @@ export function securityProtocols() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— protocols"),
+      el("span", { class: "muted" }, "— security protocols"),
     ),
     el("div", { class: "content stack", style: { gap: "var(--s-3)" } },
       block("What we keep",
