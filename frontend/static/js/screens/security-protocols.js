@@ -12,9 +12,10 @@ export function securityProtocols() {
         "Security Protocols"),
 
       block("What we keep",
-        "Callsign + password. No email, no name, no phone, no device ID.",
-        "Dispatches and captured photos, with metadata removed.",
+        "Callsign + password.",
+        "Dispatches + captured photos with metadata removed.",
         "One session cookie. No trackers. No analytics.",
+        "No email, no name, no phone, no device ID.",
       ),
 
       block("When we read your location",
@@ -25,8 +26,13 @@ export function securityProtocols() {
       ),
 
       block("Sharing",
-        "Dispatches are private until you tap Save Card or Copy Share Text.",
-        "Share URLs use an unguessable token; no public index of history.",
+        "Dispatches are private unless you share.",
+        "Share URLs use an unguessable token; no public index.",
+      ),
+
+      block("What leaves our network",
+        "Mission text → Ollama Cloud (place name + callsign + style).",
+        "Place lookups → OpenStreetMap, Wikipedia, Wikidata (lat/lng only).",
       ),
     ),
     el("div", { class: "actions" },
