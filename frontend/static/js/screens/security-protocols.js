@@ -1,4 +1,6 @@
-// Security Protocols — public, no auth. Single viewport, no scroll.
+// Security Protocols — public, no auth. Tightened to fit a single mobile
+// viewport without scrolling. Header bar already says "protocols", so we
+// drop the page title and tighten inter-section gaps.
 import { el } from "../dom.js";
 
 export function securityProtocols() {
@@ -7,10 +9,7 @@ export function securityProtocols() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— protocols"),
     ),
-    el("div", { class: "content stack" },
-      el("div", { class: "title", style: { fontSize: "var(--t-xl)" } },
-        "Security Protocols"),
-
+    el("div", { class: "content stack", style: { gap: "var(--s-3)" } },
       block("What we keep",
         "Callsign + password.",
         "Dispatches + captured photos with metadata removed.",
@@ -44,10 +43,10 @@ export function securityProtocols() {
 }
 
 function block(heading, ...lines) {
-  return el("div", { class: "stack", style: { gap: "var(--s-1)" } },
-    el("div", { class: "subtitle" }, heading),
+  return el("div", { class: "stack", style: { gap: "2px" } },
+    el("div", { class: "subtitle", style: { marginBottom: "2px" } }, heading),
     ...lines.map((line) => el("div", {
-      style: { fontSize: "var(--t-sm)", lineHeight: "1.5", color: "var(--text)" },
+      style: { fontSize: "var(--t-sm)", lineHeight: "1.35", color: "var(--text)" },
     }, "· " + line)),
   );
 }
