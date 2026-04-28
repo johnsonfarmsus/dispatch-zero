@@ -28,7 +28,7 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  const apiPrefixes = ["/auth", "/places", "/missions", "/healthz", "/config"];
+  const apiPrefixes = ["/auth", "/places", "/missions", "/healthz"];
   if (apiPrefixes.some((p) => url.pathname.startsWith(p))) {
     return;
   }

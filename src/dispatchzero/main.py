@@ -5,7 +5,6 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from dispatchzero.auth.routes import router as auth_router
-from dispatchzero.config import get_settings
 from dispatchzero.missions.routes import router as missions_router
 from dispatchzero.places.routes import router as places_router
 
@@ -20,18 +19,6 @@ app.include_router(missions_router)
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.get("/config")
-async def public_config() -> dict[str, bool]:
-    """Public, unauthenticated config the frontend may need at render time.
-
-    Append new public flags here rather than creating additional config endpoints.
-    """
-    s = get_settings()
-    return {
-        "show_beta_banner": s.show_beta_banner,
-    }
 
 
 # ----- Static + SPA -----

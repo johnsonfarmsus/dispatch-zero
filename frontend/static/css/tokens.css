@@ -23,8 +23,6 @@
   /* State */
   --danger: #d6553c;
   --success: #7c9a6e;
-  --warn: #f4d35e;
-  --warn-surface: #3a2a0a;
 
   /* Typography stacks */
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;

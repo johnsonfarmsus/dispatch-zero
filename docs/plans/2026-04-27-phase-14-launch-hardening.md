@@ -88,7 +88,7 @@ Tasks are independent. Recommended order (by launch-readiness impact):
 3. **Task 3 — Error tracking** ❌ **REVERTED** post-merge. First implemented as an in-process ntfy.sh logging handler (revised away from Sentry hosted). Trevor flagged that ntfy.sh is still a public SaaS relay and does not match the in-house principle. Code, tests, env vars, and runbook entries removed. If push-alerting comes back later, do it with a self-hosted ntfy server (single Go binary, `ntfy serve`) on VPS 3 — same protocol and phone app, our own relay.
 4. **Task 4 — Log rotation (kept) + disk-fill alert (REVERTED)** — the json-file driver cap (10m × 3) on every prod service stays; it's pure Docker config with no external dependency. The `disk-alert` sidecar (which posted to ntfy.sh) was removed alongside Task 3.
 5. **Task 5 — External uptime monitoring** ❌ **SKIPPED** — for an MVP with a small tester pool, word-of-mouth is sufficient. Re-evaluate once the pool exceeds ~20 active users. Self-hosted options (cron+ntfy on VPS 3, Uptime Kuma) preferred over UptimeRobot when this comes back.
-6. **Task 6 — Beta banner** (polish) ✅ shipped
+6. **Task 6 — Beta banner** ❌ **REVERTED** post-merge. Trevor never asked for it; the master plan summary mentioned a "soft-launch checklist" and I added the banner without checking. Removed.
 
 Each task ends in a deployable, testable state. The shipped scope (Tasks 1, 3, 4, 6) is sufficient to share the URL with testers safely.
 
@@ -1440,11 +1440,12 @@ All of the following are true on `main`:
 
 - [x] **Rate limits live in prod.** A user account can be made to hit 429 on `/missions/request` after the configured cap. Verified end-to-end.
 - [x] **Log rotation is enforced.** `docker inspect dispatchzero-app-1 --format '{{json .HostConfig.LogConfig}}'` returns `{"Type":"json-file","Config":{"max-file":"3","max-size":"10m"}}` for every prod service.
-- [x] **Beta banner ships toggleable.** `GET /config` returns `{"show_beta_banner": <bool>}`; Splash + Home render conditionally; flipping `SHOW_BETA_BANNER` and recreating `app` flips the banner.
+<!-- Task 6 reverted post-merge; banner removed entirely. -->
 
-**Reverted post-merge** (ntfy.sh is a public SaaS relay; doesn't match the in-house principle):
-- ❌ Task 3 (ntfy ERROR-log handler)
-- ❌ Task 4's disk-alert sidecar (kept the json-file log-rotation half)
+**Reverted post-merge:**
+- ❌ Task 3 (ntfy ERROR-log handler) — ntfy.sh is a public SaaS relay; doesn't match the in-house principle
+- ❌ Task 4's disk-alert sidecar (kept the json-file log-rotation half) — same reason as Task 3
+- ❌ Task 6 (BETA banner + `/config` endpoint) — Trevor never asked for it; I added it from the master plan summary without checking
 
 **Skipped/dropped pre-merge** (intentional, see task sections above):
 - ❌ Task 2 (off-host backups) — Hetzner snapshots cover the same scenarios.

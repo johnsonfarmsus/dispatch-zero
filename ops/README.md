@@ -6,22 +6,6 @@ Post-deploy steps + manual operations. Product spec is in
 
 ---
 
-## Beta banner
-
-Splash + Home show a `// BETA — closed pilot //` bar by default.
-Flip it off for public launch:
-
-```bash
-ssh root@89.167.39.152 \
-  "sed -i 's/^SHOW_BETA_BANNER=.*/SHOW_BETA_BANNER=false/' /opt/dispatchzero/.env \
-   && cd /opt/dispatchzero \
-   && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app"
-```
-
-Hard-refresh the PWA on phone afterward to bypass the service worker.
-
----
-
 ## Rate limits
 
 Tunable via env vars in `/opt/dispatchzero/.env` (defaults are sane —
