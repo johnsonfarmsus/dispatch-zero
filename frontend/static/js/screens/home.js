@@ -46,6 +46,13 @@ export async function home() {
         ),
       ),
       el("div", { class: "divider" }),
+      el("div", { class: "stack", style: { gap: "var(--s-2)", alignItems: "center" } },
+        el("span", { class: "subtitle" }, "Agent"),
+        el("span", {
+          class: "code",
+          style: { fontSize: "var(--t-2xl)", letterSpacing: "0.04em" },
+        }, user.callsign),
+      ),
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "Rank"),
