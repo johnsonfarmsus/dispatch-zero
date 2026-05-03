@@ -4,6 +4,14 @@ import { getUser, setUser } from "../state.js";
 import { navigate } from "../router.js";
 import { STYLE_META } from "../style-meta.js";
 
+// Short, viewport-friendly taglines per org. The longer prose lives in
+// STYLE_META.tone; this picker stays terse so the screen fits without scroll.
+const TAGLINES = {
+  pulp: "Warm, curious, expedition energy.",
+  agency: "Cold, classified, professional.",
+  guild: "Ancient, ceremonial, formal.",
+};
+
 export function stylePicker() {
   const current = getUser()?.adventure_style || "agency";
   const errEl = el("div", { class: "fault", hidden: true });
@@ -15,10 +23,10 @@ export function stylePicker() {
       class: isCurrent ? "primary" : "",
       style: {
         textAlign: "left",
-        padding: "var(--s-4)",
+        padding: "var(--s-3)",
         display: "flex",
         flexDirection: "column",
-        gap: "var(--s-2)",
+        gap: "2px",
       },
     },
       el("div", { class: "row", style: { justifyContent: "space-between", alignItems: "baseline" } },
@@ -27,14 +35,8 @@ export function stylePicker() {
           isCurrent ? "CURRENT" : ""),
       ),
       el("span", {
-        style: {
-          color: "var(--text)",
-          fontFamily: "var(--font-serif)",
-          lineHeight: "1.5",
-        },
-      }, meta.tone),
-      el("span", { class: "muted mono", style: { fontSize: "var(--t-xs)" } },
-        `Handler: ${meta.handler}`),
+        style: { color: "var(--text)", fontSize: "var(--t-sm)" },
+      }, TAGLINES[s] || ""),
     );
     btn.addEventListener("click", async () => {
       if (isCurrent) return;
@@ -60,11 +62,8 @@ export function stylePicker() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— organization"),
     ),
-    el("div", { class: "content stack scrollable" },
+    el("div", { class: "content stack" },
       el("div", { class: "title" }, "Choose Your Organization"),
-      el("div", { class: "muted" },
-        "Three organizations dispatch you to the same real places. Each has its own handler, its own tone, its own way of asking. Switching does not affect what you've already documented.",
-      ),
       styleOption("pulp"),
       styleOption("agency"),
       styleOption("guild"),
