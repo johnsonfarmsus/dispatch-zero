@@ -36,7 +36,7 @@ export function securityProtocols() {
     ),
     el("div", { class: "actions" },
       el("a", {
-        href: "https://ataary.com/dispatchzero/",
+        href: "https://ataary.com/tag/dispatchzero/",
         target: "_blank", rel: "noopener",
         class: "muted",
         style: { textAlign: "center", padding: "var(--s-2)" },
