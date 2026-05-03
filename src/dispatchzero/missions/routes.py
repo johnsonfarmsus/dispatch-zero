@@ -7,7 +7,7 @@ import httpx
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ from dispatchzero.schemas.completions import (
 from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut, PlaceMini
 from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.discovery import discover_nearby
+from dispatchzero.services.rank import completions_to_rank
 from dispatchzero.services.mission_flow import (
     CaptureFailedError,
     capture_mission,
@@ -458,6 +459,18 @@ async def completion_card(
         photo_path = Path(completion.photo_url) if completion.photo_url else None
         if photo_path is None or not photo_path.exists():
             raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
+        # Rank at the moment of THIS completion = number of the user's
+        # completions whose completed_at is <= this one's. Computed live so
+        # we don't have to store rank_at_completion on the row.
+        prior_count = (
+            await db.execute(
+                select(func.count(Completion.id)).where(
+                    Completion.user_id == completion.user_id,
+                    Completion.completed_at <= completion.completed_at,
+                )
+            )
+        ).scalar_one()
+        rank_then = completions_to_rank(int(prior_count))
         try:
             compose_mission_card(
                 photo_path=photo_path,
@@ -465,6 +478,8 @@ async def completion_card(
                 callsign=user.callsign,
                 completed_at=completion.completed_at,
                 adventure_style=mission.adventure_style,
+                rank_at_completion=rank_then,
+                dispatch_summary=mission.dispatch_summary,
                 output_path=card_path,
             )
         except Exception as e:

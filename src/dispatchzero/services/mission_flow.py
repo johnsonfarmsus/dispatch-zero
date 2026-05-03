@@ -20,6 +20,7 @@ from dispatchzero.models import (
 )
 from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.photo import save_thumbnail
+from dispatchzero.services.rank import completions_to_rank
 from dispatchzero.services.verification import verify_capture
 
 
@@ -66,6 +67,15 @@ async def capture_mission(
     # Compose the shareable mission card. Done synchronously at capture so the
     # Debrief screen's "Save card" is instant. Failure here doesn't fail the
     # capture — log and skip; the card endpoint will regenerate on demand.
+    # Rank-at-completion is the rank earned by THIS completion (i.e. the
+    # user's count after this insert), so we count current rows + 1.
+    prior_count = (
+        await db.execute(
+            select(func.count(Completion.id)).where(Completion.user_id == user.id)
+        )
+    ).scalar_one()
+    rank_now = completions_to_rank(int(prior_count) + 1)
+
     card_path = Path(settings.photo_upload_dir) / "cards" / f"{completion_id}.jpg"
     try:
         compose_mission_card(
@@ -74,6 +84,8 @@ async def capture_mission(
             callsign=user.callsign,
             completed_at=datetime.now(timezone.utc),
             adventure_style=mission.adventure_style,
+            rank_at_completion=rank_now,
+            dispatch_summary=mission.dispatch_summary,
             output_path=card_path,
         )
     except Exception:

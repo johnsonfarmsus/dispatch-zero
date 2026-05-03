@@ -116,6 +116,8 @@ async def test_share_card_serves_existing_file_when_present(
         callsign=user.callsign,
         completed_at=completion.completed_at,
         adventure_style="agency",
+        rank_at_completion=2,
+        dispatch_summary="A test dispatch summary.",
         output_path=card_path,
     )
     pre_size = card_path.stat().st_size
