@@ -35,6 +35,12 @@ export function securityProtocols() {
       ),
     ),
     el("div", { class: "actions" },
+      el("a", {
+        href: "https://ataary.com/dispatchzero/",
+        target: "_blank", rel: "noopener",
+        class: "muted",
+        style: { textAlign: "center", padding: "var(--s-2)" },
+      }, "Read the full write-up →"),
       el("a", { href: "/", "data-route": true, class: "muted",
                 style: { textAlign: "center", padding: "var(--s-2)" } },
         "← Return"),
