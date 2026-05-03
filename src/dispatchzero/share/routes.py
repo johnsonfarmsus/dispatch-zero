@@ -167,24 +167,19 @@ async def share_card(
         photo_path = Path(completion.photo_url) if completion.photo_url else None
         if photo_path is None or not photo_path.exists():
             raise HTTPException(status.HTTP_404_NOT_FOUND, "image missing")
-        # We need the user for the callsign on the card; load it.
-        from dispatchzero.models import Completion as CompletionModel
         from dispatchzero.models import User
-        from dispatchzero.services.rank import completions_to_rank
-        from sqlalchemy import func
+        from dispatchzero.services.rank import (
+            completions_to_rank, stats_at_completion,
+        )
 
         user = (
             await db.execute(select(User).where(User.id == completion.user_id))
         ).scalar_one()
-        prior_count = (
-            await db.execute(
-                select(func.count(CompletionModel.id)).where(
-                    CompletionModel.user_id == completion.user_id,
-                    CompletionModel.completed_at <= completion.completed_at,
-                )
-            )
-        ).scalar_one()
-        rank_then = completions_to_rank(int(prior_count))
+        total_then, week_then = await stats_at_completion(
+            db, user_id=completion.user_id,
+            at_time=completion.completed_at, include_self=True,
+        )
+        rank_then = completions_to_rank(total_then)
         try:
             compose_mission_card(
                 photo_path=photo_path,
@@ -193,6 +188,8 @@ async def share_card(
                 completed_at=completion.completed_at,
                 adventure_style=mission.adventure_style,
                 rank_at_completion=rank_then,
+                completions_total=total_then,
+                completions_this_week=week_then,
                 dispatch_summary=mission.dispatch_summary,
                 output_path=card_path,
             )

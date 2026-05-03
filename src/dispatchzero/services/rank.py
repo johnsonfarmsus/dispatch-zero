@@ -65,3 +65,54 @@ HANDLER_NAMES: dict[str, str] = {
     "agency": "Director Zero",
     "guild": "Guildmaster Zero",
 }
+
+
+# ---- snapshot stats at a given completion's moment ----
+# Used by the mission card composer so the card shows the user's stats AT
+# THE TIME of that completion, not their current state. Keeps cards as
+# true mementos.
+
+from datetime import datetime  # noqa: E402
+
+from sqlalchemy import func, select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+
+async def stats_at_completion(
+    db: AsyncSession, *, user_id, at_time: datetime, include_self: bool = True,
+) -> tuple[int, int]:
+    """Return (total_completions, completions_this_week) at the given moment.
+
+    Counts completions with completed_at <= at_time. The week boundary uses
+    Postgres date_trunc('week', ...), which is Monday-aligned in UTC.
+
+    `include_self`: when called from the regen path the target completion is
+    already in the DB; counting <= at_time naturally includes it. When called
+    from capture_mission BEFORE the new row is committed, pass include_self=False
+    and we'll add 1.
+    """
+    # Avoid circular import.
+    from dispatchzero.models import Completion
+
+    total = (
+        await db.execute(
+            select(func.count(Completion.id)).where(
+                Completion.user_id == user_id,
+                Completion.completed_at <= at_time,
+            )
+        )
+    ).scalar_one()
+
+    this_week = (
+        await db.execute(
+            select(func.count(Completion.id)).where(
+                Completion.user_id == user_id,
+                Completion.completed_at <= at_time,
+                func.date_trunc("week", Completion.completed_at)
+                == func.date_trunc("week", at_time),
+            )
+        )
+    ).scalar_one()
+
+    bump = 0 if include_self else 1
+    return int(total) + bump, int(this_week) + bump

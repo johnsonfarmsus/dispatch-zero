@@ -117,6 +117,8 @@ async def test_share_card_serves_existing_file_when_present(
         completed_at=completion.completed_at,
         adventure_style="agency",
         rank_at_completion=2,
+        completions_total=4,
+        completions_this_week=1,
         dispatch_summary="A test dispatch summary.",
         output_path=card_path,
     )

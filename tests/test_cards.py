@@ -27,6 +27,8 @@ def _kwargs(**overrides):
         completed_at=datetime(2026, 4, 27, 12, 30),
         adventure_style="agency",
         rank_at_completion=3,
+        completions_total=8,
+        completions_this_week=2,
         dispatch_summary="A two-line preview of the mission, in handler voice.",
     )
     base.update(overrides)

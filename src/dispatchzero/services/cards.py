@@ -4,28 +4,29 @@ Renders a 4:5 JPEG sized for social-feed sharing and styled like a trading
 card. Layout, top to bottom:
 
   ┌─────────────────────────────────────────────┐
-  │ // DISPATCH ZERO //         THE ARCHIVE     │  header
+  │ // DISPATCH ZERO //              42JULIET   │  header (callsign right)
   ├─────────────────────────┬───────────────────┤
-  │  [HANDLER AVATAR]       │                   │
+  │   THE ARCHIVE           │                   │
+  │   [HANDLER AVATAR]      │                   │
   │   Professor Zero        │     [PHOTO]       │  hero
-  │   The Archive           │                   │
+  │   YOUR HANDLER          │                   │
+  │   ─                     │                   │
+  │   42JULIET              │                   │
+  │   VOLUNTEER             │                   │
+  │   This week     1       │                   │
+  │   Completions   1       │                   │
   ├─────────────────────────┴───────────────────┤
-  │ RIVERFRONT PARK                             │  title
-  │ HUNTER · FIELD ANALYST · 2026-04-27         │
+  │ Place name                                  │  title
+  │ 2026-05-03                                  │
   ├─────────────────────────────────────────────┤
-  │                                             │
-  │  Mission flavor text from dispatch summary  │  flavor
-  │                                             │
-  │                       — Professor Zero      │
+  │ Mission flavor text from dispatch summary   │  flavor
+  │                                  — Handler  │
   └─────────────────────────────────────────────┘
 
-Each completion's card preserves the organization that completed it (via
-mission.adventure_style) so a card from your Archive days keeps the
-Archive theme even after you switch to The Guild.
-
-Stored once at /uploads/cards/{completion_id}.jpg at capture time, served
-thereafter by GET /missions/completions/{id}/card.jpg or the public
-/c/{share_token}/card.jpg. Regenerating is just rerunning this function.
+Each completion's card preserves the organization that completed it via
+mission.adventure_style — switching organizations later doesn't re-theme
+old cards. The user stats (rank, completions, this-week count) are a
+snapshot at the moment of THAT completion, not the user's current state.
 """
 import textwrap
 from datetime import datetime
@@ -42,7 +43,7 @@ _HEIGHT = 1350
 _OUTER_MARGIN = 30
 _INNER_PAD = 20
 
-# Section heights (sum = _HEIGHT - 2*_OUTER_MARGIN = 1290)
+# Section heights — sum = _HEIGHT - 2*_OUTER_MARGIN = 1290
 _HEADER_H = 90
 _HERO_H = 720
 _TITLE_H = 130
@@ -58,27 +59,23 @@ _TEXT = (232, 225, 216)
 _TEXT_MUTED = (133, 125, 114)
 _TEXT_FAINT = (90, 82, 73)
 
-# Per-style accent — matches the frontend style accents.
+# Per-style accent.
 _ACCENT = {
     "pulp": (214, 138, 60),    # amber
     "agency": (78, 197, 214),  # cyan
     "guild": (164, 114, 214),  # purple
 }
 
-# Per-style sign-off — matches the in-character voices in mission_prompts.
 _SIGN_OFF = {
     "pulp": "— Professor Zero",
     "agency": "— Director Zero",
     "guild": "— Guildmaster Zero",
 }
 
-# DejaVu Sans Mono is installed via apt (fonts-dejavu-core) in the prod image.
-# Fall back to PIL's bitmap default if missing — keeps tests runnable on any host.
 _FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 _FONT_REGULAR = _FONT_DIR / "DejaVuSansMono.ttf"
 _FONT_BOLD = _FONT_DIR / "DejaVuSansMono-Bold.ttf"
 
-# Avatar PNGs live alongside the rest of the frontend assets.
 _AVATAR_DIR = Path(__file__).resolve().parents[3] / "frontend" / "static" / "avatars"
 
 
@@ -93,7 +90,6 @@ def _truncate(text: str, max_chars: int) -> str:
 
 
 def _square_crop(img: Image.Image, size: int) -> Image.Image:
-    """Center-crop to square then resize to size × size."""
     if img.mode != "RGB":
         img = img.convert("RGB")
     short_side = min(img.size)
@@ -104,7 +100,6 @@ def _square_crop(img: Image.Image, size: int) -> Image.Image:
 
 
 def _avatar_for_style(style: str) -> Image.Image | None:
-    """Load the handler avatar PNG for the given style. Returns None if missing."""
     path = _AVATAR_DIR / f"zero-{style}.png"
     if not path.exists():
         path = _AVATAR_DIR / "zero-agency.png"
@@ -114,7 +109,6 @@ def _avatar_for_style(style: str) -> Image.Image | None:
 
 
 def _draw_avatar(canvas: Image.Image, avatar: Image.Image, x: int, y: int, size: int) -> None:
-    """Paste a square handler portrait at (x, y) with the given pixel size."""
     a = avatar.copy()
     if a.mode != "RGBA":
         a = a.convert("RGBA")
@@ -127,17 +121,22 @@ def _draw_avatar(canvas: Image.Image, avatar: Image.Image, x: int, y: int, size:
 
 
 def _wrap_to_lines(text: str, width_chars: int, max_lines: int) -> list[str]:
-    """Wrap text to at most max_lines of width_chars; truncate with ellipsis if longer."""
     wrapped = textwrap.wrap(text, width=width_chars, break_long_words=False)
     if len(wrapped) > max_lines:
         wrapped = wrapped[:max_lines]
-        # Append ellipsis to the last line if it fits, else replace last word with "…"
         last = wrapped[-1]
         if len(last) + 1 <= width_chars:
             wrapped[-1] = last + "…"
         else:
             wrapped[-1] = last[: width_chars - 1] + "…"
     return wrapped
+
+
+def _draw_centered(draw: ImageDraw.ImageDraw, x: int, w: int, y: int, text: str,
+                    font: ImageFont.ImageFont, fill: tuple[int, int, int]) -> None:
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    draw.text((x + (w - tw) // 2, y), text, font=font, fill=fill)
 
 
 def compose_mission_card(
@@ -148,6 +147,8 @@ def compose_mission_card(
     completed_at: datetime,
     adventure_style: str,
     rank_at_completion: int,
+    completions_total: int,
+    completions_this_week: int,
     dispatch_summary: str,
     output_path: Path,
 ) -> None:
@@ -157,11 +158,11 @@ def compose_mission_card(
     org_name = ORG_NAMES.get(adventure_style, ORG_NAMES["agency"])
     handler_name = HANDLER_NAMES.get(adventure_style, HANDLER_NAMES["agency"])
     rank_label = rank_name(adventure_style, rank_at_completion)
+    callsign_upper = callsign.upper()
 
     canvas = Image.new("RGB", (_WIDTH, _HEIGHT), _BG)
     draw = ImageDraw.Draw(canvas)
 
-    # Outer accent border (thin, matches the style color).
     draw.rectangle(
         [(15, 15), (_WIDTH - 15, _HEIGHT - 15)],
         outline=accent, width=2,
@@ -170,79 +171,117 @@ def compose_mission_card(
     inner_left = _OUTER_MARGIN
     inner_right = _WIDTH - _OUTER_MARGIN
 
-    # ----- Header band -----
+    # ----- Header band: wordmark left, callsign right -----
     header_top = _OUTER_MARGIN
     header_bottom = header_top + _HEADER_H
-    title_font = _font(_FONT_BOLD, 28)
+    header_font = _font(_FONT_BOLD, 28)
 
     draw.text(
         (inner_left + _INNER_PAD, header_top + 30),
         "// DISPATCH ZERO //",
-        font=title_font, fill=_TEXT_MUTED,
+        font=header_font, fill=_TEXT_MUTED,
     )
-    org_text = org_name.upper()
-    bbox = draw.textbbox((0, 0), org_text, font=title_font)
-    org_w = bbox[2] - bbox[0]
+    bbox = draw.textbbox((0, 0), callsign_upper, font=header_font)
+    cs_w = bbox[2] - bbox[0]
     draw.text(
-        (inner_right - _INNER_PAD - org_w, header_top + 30),
-        org_text,
-        font=title_font, fill=accent,
+        (inner_right - _INNER_PAD - cs_w, header_top + 30),
+        callsign_upper,
+        font=header_font, fill=accent,
     )
-    # Divider under header
     draw.line(
         [(inner_left, header_bottom), (inner_right, header_bottom)],
         fill=accent, width=1,
     )
 
-    # ----- Hero band: handler column (left) + photo (right) -----
+    # ----- Hero band: handler/stats column (left) + photo (right) -----
     hero_top = header_bottom
     hero_bottom = hero_top + _HERO_H
     handler_col_x = inner_left
     photo_x = handler_col_x + _HANDLER_COL_W + _INNER_PAD
 
-    # Handler column — avatar centered horizontally, name + org below.
-    avatar_size = 180
+    # --- Left column: top-to-bottom layout ---
+    org_font = _font(_FONT_BOLD, 22)
+    handler_name_font = _font(_FONT_BOLD, 22)
+    role_font = _font(_FONT_REGULAR, 16)
+    callsign_font = _font(_FONT_BOLD, 24)
+    rank_font = _font(_FONT_REGULAR, 18)
+    stats_label_font = _font(_FONT_REGULAR, 16)
+    stats_value_font = _font(_FONT_BOLD, 18)
+
+    cursor_y = hero_top + 18
+    avatar_size = 160
+
+    # ORG NAME above avatar
+    _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
+                   org_name.upper(), org_font, accent)
+    cursor_y += 32
+
+    # AVATAR
     avatar = _avatar_for_style(adventure_style)
     if avatar is not None:
         avatar_x = handler_col_x + (_HANDLER_COL_W - avatar_size) // 2
-        avatar_y = hero_top + 60
-        _draw_avatar(canvas, avatar, avatar_x, avatar_y, avatar_size)
+        _draw_avatar(canvas, avatar, avatar_x, cursor_y, avatar_size)
+    cursor_y += avatar_size + 14
 
-    handler_label_font = _font(_FONT_BOLD, 22)
-    handler_role_font = _font(_FONT_REGULAR, 18)
-    name_y = hero_top + 60 + avatar_size + 24
-    bbox = draw.textbbox((0, 0), handler_name, font=handler_label_font)
-    name_w = bbox[2] - bbox[0]
-    draw.text(
-        (handler_col_x + (_HANDLER_COL_W - name_w) // 2, name_y),
-        handler_name,
-        font=handler_label_font, fill=_TEXT,
-    )
-    role_y = name_y + 30
-    bbox = draw.textbbox((0, 0), "YOUR HANDLER", font=handler_role_font)
-    role_w = bbox[2] - bbox[0]
-    draw.text(
-        (handler_col_x + (_HANDLER_COL_W - role_w) // 2, role_y),
-        "YOUR HANDLER",
-        font=handler_role_font, fill=_TEXT_MUTED,
-    )
+    # HANDLER NAME
+    _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
+                   handler_name, handler_name_font, _TEXT)
+    cursor_y += 28
 
-    # Photo (square, right side of hero)
+    # YOUR HANDLER label
+    _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
+                   "YOUR HANDLER", role_font, _TEXT_MUTED)
+    cursor_y += 30
+
+    # Divider between handler block and agent stats
+    div_pad = 18
+    draw.line(
+        [(handler_col_x + div_pad, cursor_y),
+         (handler_col_x + _HANDLER_COL_W - div_pad, cursor_y)],
+        fill=_TEXT_FAINT, width=1,
+    )
+    cursor_y += 16
+
+    # CALLSIGN (the agent's name)
+    _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
+                   callsign_upper, callsign_font, _TEXT)
+    cursor_y += 30
+
+    # RANK
+    _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
+                   rank_label.upper(), rank_font, accent)
+    cursor_y += 28
+
+    # STATS rows: label left, value right (within the column)
+    stat_pad = 22
+    row_left = handler_col_x + stat_pad
+    row_right = handler_col_x + _HANDLER_COL_W - stat_pad
+
+    def stat_row(label: str, value: str, y: int) -> None:
+        draw.text((row_left, y), label, font=stats_label_font, fill=_TEXT_MUTED)
+        bbox = draw.textbbox((0, 0), value, font=stats_value_font)
+        vw = bbox[2] - bbox[0]
+        draw.text((row_right - vw, y), value, font=stats_value_font, fill=_TEXT)
+
+    stat_row("This week", str(completions_this_week), cursor_y)
+    cursor_y += 26
+    stat_row("Completions", str(completions_total), cursor_y)
+
+    # --- Right side: photo ---
     photo_y = hero_top + (_HERO_H - _PHOTO_SIZE) // 2
     photo = Image.open(photo_path)
     photo = _square_crop(photo, _PHOTO_SIZE)
     canvas.paste(photo, (photo_x, photo_y))
 
-    # Divider under hero
     draw.line(
         [(inner_left, hero_bottom), (inner_right, hero_bottom)],
         fill=accent, width=1,
     )
 
-    # ----- Title band: place name + meta -----
+    # ----- Title band: place name + date only -----
     title_top = hero_bottom
     place_font = _font(_FONT_BOLD, 40)
-    meta_font = _font(_FONT_REGULAR, 22)
+    date_font = _font(_FONT_REGULAR, 22)
 
     draw.text(
         (inner_left + _INNER_PAD, title_top + 18),
@@ -250,11 +289,10 @@ def compose_mission_card(
         font=place_font, fill=_TEXT,
     )
     date_str = completed_at.strftime("%Y-%m-%d")
-    meta = f"{callsign.upper()}  ·  {rank_label.upper()}  ·  {date_str}"
     draw.text(
         (inner_left + _INNER_PAD, title_top + 70),
-        meta,
-        font=meta_font, fill=_TEXT_MUTED,
+        date_str,
+        font=date_font, fill=_TEXT_MUTED,
     )
 
     title_bottom = title_top + _TITLE_H
@@ -269,7 +307,6 @@ def compose_mission_card(
     flavor_font = _font(_FONT_REGULAR, 22)
     sign_font = _font(_FONT_REGULAR, 20)
 
-    # Wrap to fit
     lines = _wrap_to_lines(flavor_text, width_chars=42, max_lines=8)
     line_y = flavor_top + 28
     for line in lines:
@@ -280,7 +317,6 @@ def compose_mission_card(
         )
         line_y += 32
 
-    # Sign-off bottom-right
     bbox = draw.textbbox((0, 0), sign_off, font=sign_font)
     sign_w = bbox[2] - bbox[0]
     sign_y = _HEIGHT - _OUTER_MARGIN - 50

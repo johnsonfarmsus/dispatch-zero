@@ -27,7 +27,7 @@ from dispatchzero.schemas.completions import (
 from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut, PlaceMini
 from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.discovery import discover_nearby
-from dispatchzero.services.rank import completions_to_rank
+from dispatchzero.services.rank import completions_to_rank, stats_at_completion
 from dispatchzero.services.mission_flow import (
     CaptureFailedError,
     capture_mission,
@@ -459,18 +459,13 @@ async def completion_card(
         photo_path = Path(completion.photo_url) if completion.photo_url else None
         if photo_path is None or not photo_path.exists():
             raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
-        # Rank at the moment of THIS completion = number of the user's
-        # completions whose completed_at is <= this one's. Computed live so
-        # we don't have to store rank_at_completion on the row.
-        prior_count = (
-            await db.execute(
-                select(func.count(Completion.id)).where(
-                    Completion.user_id == completion.user_id,
-                    Completion.completed_at <= completion.completed_at,
-                )
-            )
-        ).scalar_one()
-        rank_then = completions_to_rank(int(prior_count))
+        # Snapshot stats at this completion's moment — the row is already
+        # in the DB so include_self=True (counts <= at_time include this one).
+        total_then, week_then = await stats_at_completion(
+            db, user_id=completion.user_id,
+            at_time=completion.completed_at, include_self=True,
+        )
+        rank_then = completions_to_rank(total_then)
         try:
             compose_mission_card(
                 photo_path=photo_path,
@@ -479,6 +474,8 @@ async def completion_card(
                 completed_at=completion.completed_at,
                 adventure_style=mission.adventure_style,
                 rank_at_completion=rank_then,
+                completions_total=total_then,
+                completions_this_week=week_then,
                 dispatch_summary=mission.dispatch_summary,
                 output_path=card_path,
             )
