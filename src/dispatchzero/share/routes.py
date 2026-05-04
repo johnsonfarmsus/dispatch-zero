@@ -59,16 +59,13 @@ async def share_page(
 ) -> HTMLResponse:
     completion, _mission, place = await _load_completion_by_token(db, share_token)
     place_name = place.name or "Unmarked target"
-    date_str = completion.completed_at.strftime("%B %-d, %Y")
     card_url = _absolute_url(request, f"/c/{share_token}/card.jpg")
     page_url = _absolute_url(request, f"/c/{share_token}")
 
     # Minimal page. The card image carries the visual story; the page is
-    # essentially a frame for the unfurl preview.
+    # essentially a frame for the unfurl preview + the CTA below.
     title = escape(f"{place_name} — Dispatch Zero")
     description = escape(f"A dispatch was completed at {place_name}.")
-    safe_place = escape(place_name)
-    safe_date = escape(date_str)
 
     html = f"""<!doctype html>
 <html lang="en">
@@ -111,20 +108,6 @@ async def share_page(
     display: block;
     border: 1px solid var(--rule);
   }}
-  .meta {{
-    margin-top: 1rem;
-    text-align: center;
-  }}
-  .place {{
-    font-size: 1.25rem;
-    margin: 0;
-  }}
-  .date {{
-    color: var(--text-muted);
-    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-    font-size: 0.85rem;
-    margin: 0.25rem 0 0;
-  }}
   .cta {{
     margin-top: 2rem;
     text-align: center;
@@ -163,10 +146,6 @@ async def share_page(
 </head>
 <body>
   <div class="card-wrap"><img src="{card_url}" alt="Mission card"></div>
-  <div class="meta">
-    <p class="place">{safe_place}</p>
-    <p class="date">{safe_date}</p>
-  </div>
   <div class="cta">
     <p class="cta-line">Receive your own dispatch.</p>
     <a class="cta-link" href="/">dispatchzero.ataary.com →</a>

@@ -200,13 +200,16 @@ def compose_mission_card(
     photo_x = handler_col_x + _HANDLER_COL_W + _INNER_PAD
 
     # --- Left column: top-to-bottom layout ---
-    org_font = _font(_FONT_BOLD, 22)
-    handler_name_font = _font(_FONT_BOLD, 22)
-    role_font = _font(_FONT_REGULAR, 16)
-    callsign_font = _font(_FONT_BOLD, 24)
-    rank_font = _font(_FONT_REGULAR, 18)
-    stats_label_font = _font(_FONT_REGULAR, 16)
-    stats_value_font = _font(_FONT_BOLD, 18)
+    # Text bumped throughout — left column was reading too small for the
+    # space available. Stats values get the most weight (they're the
+    # numbers people glance at).
+    org_font = _font(_FONT_BOLD, 24)
+    handler_name_font = _font(_FONT_BOLD, 24)
+    role_font = _font(_FONT_REGULAR, 18)
+    callsign_font = _font(_FONT_BOLD, 30)
+    rank_font = _font(_FONT_REGULAR, 22)
+    stats_label_font = _font(_FONT_REGULAR, 20)
+    stats_value_font = _font(_FONT_BOLD, 30)
 
     cursor_y = hero_top + 18
     avatar_size = 160
@@ -214,24 +217,24 @@ def compose_mission_card(
     # ORG NAME above avatar
     _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
                    org_name.upper(), org_font, accent)
-    cursor_y += 32
+    cursor_y += 36
 
     # AVATAR
     avatar = _avatar_for_style(adventure_style)
     if avatar is not None:
         avatar_x = handler_col_x + (_HANDLER_COL_W - avatar_size) // 2
         _draw_avatar(canvas, avatar, avatar_x, cursor_y, avatar_size)
-    cursor_y += avatar_size + 14
+    cursor_y += avatar_size + 18
 
     # HANDLER NAME
     _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
                    handler_name, handler_name_font, _TEXT)
-    cursor_y += 28
+    cursor_y += 32
 
     # YOUR HANDLER label
     _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
                    "YOUR HANDLER", role_font, _TEXT_MUTED)
-    cursor_y += 30
+    cursor_y += 36
 
     # Divider between handler block and agent stats
     div_pad = 18
@@ -240,31 +243,36 @@ def compose_mission_card(
          (handler_col_x + _HANDLER_COL_W - div_pad, cursor_y)],
         fill=_TEXT_FAINT, width=1,
     )
-    cursor_y += 16
+    cursor_y += 22
 
     # CALLSIGN (the agent's name)
     _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
                    callsign_upper, callsign_font, _TEXT)
-    cursor_y += 30
+    cursor_y += 38
 
     # RANK
     _draw_centered(draw, handler_col_x, _HANDLER_COL_W, cursor_y,
                    rank_label.upper(), rank_font, accent)
-    cursor_y += 28
+    cursor_y += 38
 
     # STATS rows: label left, value right (within the column)
-    stat_pad = 22
+    stat_pad = 18
     row_left = handler_col_x + stat_pad
     row_right = handler_col_x + _HANDLER_COL_W - stat_pad
 
     def stat_row(label: str, value: str, y: int) -> None:
-        draw.text((row_left, y), label, font=stats_label_font, fill=_TEXT_MUTED)
+        # Vertically center the label against the larger value baseline.
+        label_offset = 6
+        draw.text(
+            (row_left, y + label_offset), label,
+            font=stats_label_font, fill=_TEXT_MUTED,
+        )
         bbox = draw.textbbox((0, 0), value, font=stats_value_font)
         vw = bbox[2] - bbox[0]
         draw.text((row_right - vw, y), value, font=stats_value_font, fill=_TEXT)
 
     stat_row("This week", str(completions_this_week), cursor_y)
-    cursor_y += 26
+    cursor_y += 38
     stat_row("Completions", str(completions_total), cursor_y)
 
     # --- Right side: photo ---
@@ -280,12 +288,18 @@ def compose_mission_card(
 
     # ----- Title band: place name + date only -----
     title_top = hero_bottom
-    place_font = _font(_FONT_BOLD, 40)
-    date_font = _font(_FONT_REGULAR, 22)
+    # Pick a place-name font that fits the actual string. A bold mono char is
+    # ~0.6 * size wide; the title row has ~1000px to play with after padding.
+    # Bumped truncation cap to 38 chars so common landmark names ("Harrington
+    # Bank Block & Opera House" = 35) don't lose the suffix.
+    name_to_render = _truncate(place_name, 38)
+    place_font_size = 40 if len(name_to_render) <= 28 else 34
+    place_font = _font(_FONT_BOLD, place_font_size)
+    date_font = _font(_FONT_REGULAR, 26)
 
     draw.text(
-        (inner_left + _INNER_PAD, title_top + 18),
-        _truncate(place_name, 30),
+        (inner_left + _INNER_PAD, title_top + 16),
+        name_to_render,
         font=place_font, fill=_TEXT,
     )
     date_str = completed_at.strftime("%Y-%m-%d")
@@ -304,18 +318,18 @@ def compose_mission_card(
     # ----- Flavor band: dispatch summary + sign-off -----
     flavor_top = title_bottom
     flavor_text = (dispatch_summary or "").strip()
-    flavor_font = _font(_FONT_REGULAR, 22)
-    sign_font = _font(_FONT_REGULAR, 20)
+    flavor_font = _font(_FONT_REGULAR, 26)
+    sign_font = _font(_FONT_REGULAR, 22)
 
-    lines = _wrap_to_lines(flavor_text, width_chars=42, max_lines=8)
-    line_y = flavor_top + 28
+    lines = _wrap_to_lines(flavor_text, width_chars=36, max_lines=7)
+    line_y = flavor_top + 30
     for line in lines:
         draw.text(
             (inner_left + _INNER_PAD, line_y),
             line,
             font=flavor_font, fill=_TEXT,
         )
-        line_y += 32
+        line_y += 38
 
     bbox = draw.textbbox((0, 0), sign_off, font=sign_font)
     sign_w = bbox[2] - bbox[0]
