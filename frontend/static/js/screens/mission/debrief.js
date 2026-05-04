@@ -23,8 +23,7 @@ export async function debrief({ id }) {
   if (d?.completion?.id && d?.completion?.share_token) {
     rateBtn.addEventListener("click",
       () => navigate(`/completions/${d.completion.id}/rate`));
-    saveCardBtn.addEventListener("click",
-      () => saveCard(d.completion.id, cardStatus, saveCardBtn));
+    saveCardBtn.addEventListener("click", () => saveCard(d.completion.id));
     copyShareBtn.addEventListener("click",
       () => copyShareText(d.completion.share_token, mission.place.name, cardStatus));
   } else {

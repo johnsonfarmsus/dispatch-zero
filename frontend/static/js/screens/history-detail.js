@@ -38,8 +38,7 @@ export async function historyDetail({ id }) {
     style: { textAlign: "center", fontSize: "var(--t-xs)" },
   }, "");
 
-  saveCardBtn.addEventListener("click",
-    () => saveCard(c.id, cardStatus, saveCardBtn));
+  saveCardBtn.addEventListener("click", () => saveCard(c.id));
   copyShareBtn.addEventListener("click",
     () => copyShareText(c.share_token, c.place_name, cardStatus));
 
