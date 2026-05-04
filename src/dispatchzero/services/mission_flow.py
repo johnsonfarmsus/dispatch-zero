@@ -150,11 +150,13 @@ async def rate_completion(
     location_rating: Literal["up", "down"] | None,
     mission_rating: Literal["up", "down"] | None,
     location_reason: str | None,
+    mission_reason: str | None = None,
 ) -> Completion:
     """Apply a two-axis rating. Idempotent (overwrites if re-submitted)."""
     completion.location_rating = location_rating
     completion.mission_rating = mission_rating
     completion.location_reason = location_reason
+    completion.mission_reason = mission_reason
     db.add(completion)
 
     if location_rating == "up":

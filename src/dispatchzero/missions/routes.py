@@ -423,6 +423,7 @@ async def rate(
         location_rating=payload.location_rating,
         mission_rating=payload.mission_rating,
         location_reason=payload.location_reason,
+        mission_reason=payload.mission_reason,
     )
     return _completion_to_out(completion)
 

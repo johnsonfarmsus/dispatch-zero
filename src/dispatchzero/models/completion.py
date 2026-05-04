@@ -16,6 +16,13 @@ class LocationReason(StrEnum):
     UNSAFE = "unsafe"
 
 
+class MissionReason(StrEnum):
+    BLAND = "bland"
+    INACCURATE = "inaccurate"
+    WRONG_TONE = "wrong_tone"
+    CONFUSING = "confusing"
+
+
 class Completion(Base):
     __tablename__ = "completions"
 
@@ -47,6 +54,7 @@ class Completion(Base):
     location_rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
     mission_rating: Mapped[str | None] = mapped_column(String(8), nullable=True)
     location_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    mission_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     completed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

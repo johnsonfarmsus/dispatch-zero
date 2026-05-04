@@ -1,5 +1,5 @@
 from dispatchzero.models.base import Base
-from dispatchzero.models.completion import Completion, LocationReason
+from dispatchzero.models.completion import Completion, LocationReason, MissionReason
 from dispatchzero.models.mission import Mission, MissionStatus
 from dispatchzero.models.mission_stop import MissionStop
 from dispatchzero.models.place import Place, PlaceCategory, PlaceStatus
@@ -12,6 +12,7 @@ __all__ = [
     "Completion",
     "LocationReason",
     "Mission",
+    "MissionReason",
     "MissionStatus",
     "MissionStop",
     "Place",

@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 LocationReason = Literal["gone", "not_found", "inaccessible", "unsafe"]
+MissionReason = Literal["bland", "inaccurate", "wrong_tone", "confusing"]
 
 
 class MissionRequestIn(BaseModel):
@@ -33,6 +34,7 @@ class RateIn(BaseModel):
     location_rating: Literal["up", "down"] | None = None
     mission_rating: Literal["up", "down"] | None = None
     location_reason: LocationReason | None = None
+    mission_reason: MissionReason | None = None
 
 
 class CompletionListItem(BaseModel):

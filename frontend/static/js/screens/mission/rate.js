@@ -7,6 +7,7 @@ export function rate({ id }) {
   let locationRating = null;   // 'up' | 'down' | null
   let missionRating = null;
   let locationReason = null;
+  let missionReason = null;
 
   const errEl = el("div", { class: "fault", hidden: true });
 
@@ -15,16 +16,26 @@ export function rate({ id }) {
     btn.addEventListener("click", () => {
       if (kind === "location") {
         locationRating = locationRating === value ? null : value;
-        renderSelected();
-        reasonRow.hidden = locationRating !== "down";
+        // Reason only matters for downvotes; clear on toggle-off / upvote.
+        if (locationRating !== "down") {
+          locationReason = null;
+          locationReasonSelect.value = "";
+        }
+        locationReasonRow.hidden = locationRating !== "down";
       } else {
         missionRating = missionRating === value ? null : value;
-        renderSelected();
+        if (missionRating !== "down") {
+          missionReason = null;
+          missionReasonSelect.value = "";
+        }
+        missionReasonRow.hidden = missionRating !== "down";
       }
+      renderSelected();
     });
     return btn;
   }
 
+  // Up button declared first so it sits leftmost in the row.
   const placeUp = thumbBtn("▲", "up", "location");
   const placeDown = thumbBtn("▼", "down", "location");
   const missionUp = thumbBtn("▲", "up", "mission");
@@ -37,20 +48,36 @@ export function rate({ id }) {
     missionDown.classList.toggle("selected", missionRating === "down");
   }
 
-  const reasonSelect = el("select", { name: "location_reason" },
+  // ----- Location reason (shown only when location is downvoted) -----
+  const locationReasonSelect = el("select", { name: "location_reason" },
     el("option", { value: "" }, "(no reason given)"),
     el("option", { value: "gone" }, "Place is gone"),
     el("option", { value: "not_found" }, "Couldn't find it"),
     el("option", { value: "inaccessible" }, "Not accessible"),
     el("option", { value: "unsafe" }, "Felt unsafe"),
   );
-  reasonSelect.addEventListener("change", () => {
-    locationReason = reasonSelect.value || null;
+  locationReasonSelect.addEventListener("change", () => {
+    locationReason = locationReasonSelect.value || null;
   });
-
-  const reasonRow = el("div", { class: "field", hidden: true },
+  const locationReasonRow = el("div", { class: "field", hidden: true },
     el("label", {}, "Reason"),
-    reasonSelect,
+    locationReasonSelect,
+  );
+
+  // ----- Mission reason (shown only when mission is downvoted) -----
+  const missionReasonSelect = el("select", { name: "mission_reason" },
+    el("option", { value: "" }, "(no reason given)"),
+    el("option", { value: "bland" }, "Bland or generic"),
+    el("option", { value: "inaccurate" }, "Inaccurate about the place"),
+    el("option", { value: "wrong_tone" }, "Tone didn't fit"),
+    el("option", { value: "confusing" }, "Hard to follow"),
+  );
+  missionReasonSelect.addEventListener("change", () => {
+    missionReason = missionReasonSelect.value || null;
+  });
+  const missionReasonRow = el("div", { class: "field", hidden: true },
+    el("label", {}, "Reason"),
+    missionReasonSelect,
   );
 
   const submitBtn = el("button", { class: "primary" }, "Submit");
@@ -67,6 +94,7 @@ export function rate({ id }) {
         location_rating: locationRating,
         mission_rating: missionRating,
         location_reason: locationReason,
+        mission_reason: missionReason,
       });
       if (r.ok) {
         clearLastDebrief();
@@ -91,13 +119,14 @@ export function rate({ id }) {
       el("div", { class: "subtitle" }, "RATE"),
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
         el("div", { class: "subtitle" }, "THIS PLACE"),
-        el("div", { class: "row" }, placeDown, placeUp),
+        el("div", { class: "row" }, placeUp, placeDown),
       ),
-      reasonRow,
+      locationReasonRow,
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
         el("div", { class: "subtitle" }, "THIS MISSION"),
-        el("div", { class: "row" }, missionDown, missionUp),
+        el("div", { class: "row" }, missionUp, missionDown),
       ),
+      missionReasonRow,
       errEl,
     ),
     el("div", { class: "actions" }, submitBtn, skipLink),
