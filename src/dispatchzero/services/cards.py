@@ -321,7 +321,9 @@ def compose_mission_card(
     flavor_font = _font(_FONT_REGULAR, 26)
     sign_font = _font(_FONT_REGULAR, 22)
 
-    lines = _wrap_to_lines(flavor_text, width_chars=36, max_lines=7)
+    # ~58 chars fits the inner width at 26pt DejaVu Sans Mono with side
+    # padding. Was 36 before the font bump; that left a big gap on the right.
+    lines = _wrap_to_lines(flavor_text, width_chars=58, max_lines=7)
     line_y = flavor_top + 30
     for line in lines:
         draw.text(
