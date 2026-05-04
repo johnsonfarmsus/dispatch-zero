@@ -125,15 +125,40 @@ async def share_page(
     font-size: 0.85rem;
     margin: 0.25rem 0 0;
   }}
-  footer {{
+  .cta {{
     margin-top: 2rem;
+    text-align: center;
+  }}
+  .cta-line {{
+    color: var(--text);
+    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }}
+  .cta-link {{
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: #f4d35e;
+    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    border: 1px solid #3a2a0a;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+  }}
+  .cta-link:hover {{
+    background: #3a2a0a;
+  }}
+  footer {{
+    margin-top: 2.5rem;
     color: var(--text-muted);
     font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
   }}
   footer a {{ color: var(--text-muted); text-decoration: none; }}
-  footer a:hover {{ text-decoration: underline; }}
 </style>
 </head>
 <body>
@@ -141,6 +166,10 @@ async def share_page(
   <div class="meta">
     <p class="place">{safe_place}</p>
     <p class="date">{safe_date}</p>
+  </div>
+  <div class="cta">
+    <p class="cta-line">Receive your own dispatch.</p>
+    <a class="cta-link" href="/">dispatchzero.ataary.com →</a>
   </div>
   <footer>
     <a href="/">// dispatch zero //</a>
