@@ -1,6 +1,6 @@
-// Single-completion review screen — pulled from /history/:id.
-// Shows the full mission card image with the same Save and Copy Share
-// actions used on the post-capture Debrief screen.
+// Single-completion review screen. The card itself IS the page — the title /
+// date / callsign / rank are already baked into the JPEG, so we don't repeat
+// them as text. Two compact side-by-side buttons for Save Card + Copy Link.
 import { api } from "../api.js";
 import { el } from "../dom.js";
 import { saveCard, copyShareText } from "../share-actions.js";
@@ -26,48 +26,43 @@ export async function historyDetail({ id }) {
   }
 
   const c = r.data;
-  const date = new Date(c.completed_at);
-  const dateStr = date.toLocaleDateString(undefined, {
-    year: "numeric", month: "long", day: "numeric",
-  });
 
-  const saveCardBtn = el("button", {}, "Save Card");
-  const copyShareBtn = el("button", {}, "Copy Share Text");
-  const cardStatus = el("div", {
+  const status = el("div", {
     class: "muted mono",
-    style: { textAlign: "center", fontSize: "var(--t-xs)" },
+    style: { textAlign: "center", fontSize: "var(--t-xs)", minHeight: "1em" },
   }, "");
 
-  saveCardBtn.addEventListener("click", () => saveCard(c.id));
-  copyShareBtn.addEventListener("click",
-    () => copyShareText(c.share_token, c.place_name, cardStatus));
+  const saveBtn = el("button", { style: { flex: "1 1 0" } }, "Save Card");
+  const copyBtn = el("button", { style: { flex: "1 1 0" } }, "Copy Link");
+  saveBtn.addEventListener("click", () => saveCard(c.id));
+  copyBtn.addEventListener("click",
+    () => copyShareText(c.share_token, c.place_name, status));
 
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— dispatch"),
     ),
-    el("div", { class: "content stack" },
+    el("div", {
+      class: "content",
+      style: {
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: "var(--s-3)",
+      },
+    },
       el("img", {
         src: `/missions/completions/${c.id}/card.jpg`,
         alt: "Mission card",
         style: {
-          width: "100%", maxWidth: "360px", height: "auto",
-          alignSelf: "center", display: "block",
-          border: "1px solid var(--surface-rule)",
+          width: "100%", maxWidth: "420px", height: "auto",
+          display: "block", border: "1px solid var(--surface-rule)",
         },
       }),
-      el("div", { class: "stack", style: { gap: "var(--s-1)", textAlign: "center" } },
-        el("div", { class: "title", style: { fontSize: "var(--t-xl)" } },
-          c.place_name || "Unmarked target"),
-        el("div", { class: "muted mono", style: { fontSize: "var(--t-xs)" } },
-          `${(c.place_category || "").toUpperCase()} · ${dateStr}`),
-      ),
     ),
     el("div", { class: "actions" },
-      saveCardBtn,
-      copyShareBtn,
-      cardStatus,
+      el("div", { class: "row", style: { gap: "var(--s-2)" } }, saveBtn, copyBtn),
+      status,
       el("a", { href: "/history", "data-route": true, class: "muted",
                 style: { textAlign: "center", padding: "var(--s-2)" } },
         "← Back to Dossier"),

@@ -16,17 +16,16 @@ export function saveCard(completionId) {
   );
 }
 
-// Build a sharable text + URL and put it on the clipboard. Works for any
-// destination (Bluesky, Mastodon, SMS, email, etc.) — user pastes wherever.
-export async function copyShareText(shareToken, placeName, statusEl) {
+// Copy the share URL (and only the URL) to the clipboard. Pasting the bare
+// URL into Bluesky/Mastodon/Discord/Slack lets each platform unfurl it
+// using the OG tags on the public /c/<token> page — no extra preamble
+// needed (and apps that don't unfurl can show the link as-is).
+export async function copyShareText(shareToken, _placeName, statusEl) {
   const url = `${window.location.origin}/c/${shareToken}`;
-  const text = placeName
-    ? `Dispatched to ${placeName}. ${url}`
-    : `Dispatched. ${url}`;
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(url);
     statusEl.style.color = "var(--text-muted)";
-    statusEl.textContent = "Copied — paste anywhere.";
+    statusEl.textContent = "Link copied.";
   } catch (e) {
     statusEl.style.color = "var(--danger)";
     statusEl.textContent = "Copy failed — long-press to copy: " + url;

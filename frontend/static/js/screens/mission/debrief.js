@@ -9,11 +9,11 @@ export async function debrief({ id }) {
   const d = getLastDebrief();
 
   const rateBtn = el("button", { class: "primary" }, "Rate Mission");
-  const saveCardBtn = el("button", {}, "Save Card");
-  const copyShareBtn = el("button", {}, "Copy Share Text");
+  const saveCardBtn = el("button", { style: { flex: "1 1 0" } }, "Save Card");
+  const copyShareBtn = el("button", { style: { flex: "1 1 0" } }, "Copy Link");
   const cardStatus = el("div", {
     class: "muted mono",
-    style: { textAlign: "center", fontSize: "var(--t-xs)" },
+    style: { textAlign: "center", fontSize: "var(--t-xs)", minHeight: "1em" },
   }, "");
   const skipLink = el("a", {
     href: "/", "data-route": true, class: "muted",
@@ -81,7 +81,12 @@ export async function debrief({ id }) {
       stats,
       badge,
     ),
-    el("div", { class: "actions" }, rateBtn, saveCardBtn, copyShareBtn, cardStatus, skipLink),
+    el("div", { class: "actions" },
+      rateBtn,
+      el("div", { class: "row", style: { gap: "var(--s-2)" } }, saveCardBtn, copyShareBtn),
+      cardStatus,
+      skipLink,
+    ),
   );
 
   return {
