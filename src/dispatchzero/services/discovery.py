@@ -44,6 +44,13 @@ _NAME_EXCLUSIONS: tuple[str, ...] = (
     "kindergarten",
     "preschool",
     "daycare",
+    # Airports / airfields: secured perimeters, no public foot access, and
+    # photographing infrastructure invites unwanted attention from staff.
+    "airport",
+    "airfield",
+    "airstrip",
+    "runway",
+    "terminal",
 )
 
 

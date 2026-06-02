@@ -1,9 +1,13 @@
 import { el } from "../../dom.js";
 import { loadMission } from "../../flow.js";
-import { getUser } from "../../state.js";
 import { navigate } from "../../router.js";
 import { styleMeta } from "../../style-meta.js";
 
+// Single-screen dispatch. With OLMo 2's tighter 200-280 char briefings,
+// the old summary→brief two-step is friction we no longer need: render
+// the full briefing_text directly alongside the Accept button.
+// (dispatch_summary stays in the API payload — TTS, dossier previews,
+// and share-card metadata still consume it.)
 export async function dispatch({ id }) {
   let mission;
   try {
@@ -26,12 +30,10 @@ export async function dispatch({ id }) {
     );
   }
 
-  const user = getUser();
   const code = String(mission.id).slice(0, 8);
+  const paragraphs = (mission.briefing_text || "").split(/\n\n+/);
 
-  const openBrief = el("button", {}, "Open Brief");
   const acceptBtn = el("button", { class: "primary" }, "Accept");
-  openBrief.addEventListener("click", () => navigate(`/mission/${mission.id}/brief`));
   acceptBtn.addEventListener("click", () => navigate(`/mission/${mission.id}/objective`));
 
   return el("div", { class: "screen" },
@@ -39,7 +41,7 @@ export async function dispatch({ id }) {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "code" }, code),
     ),
-    el("div", { class: "content stack" },
+    el("div", { class: "content scrollable stack" },
       el("div", { class: "handler-mark" },
         el("img", {
           src: `/static/avatars/zero-${mission.adventure_style}.png`,
@@ -54,11 +56,19 @@ export async function dispatch({ id }) {
         mission.place.name || "An unmarked target"),
       el("div", { class: "muted mono", style: { fontSize: "var(--t-xs)" } },
         mission.place.category.toUpperCase()),
-      el("div", {
-        style: { marginTop: "var(--s-3)", fontFamily: "var(--font-serif)",
-                 fontSize: "var(--t-base)", lineHeight: "1.6" },
-      }, mission.dispatch_summary),
+      ...paragraphs.map((p) =>
+        el("p", {
+          style: { fontFamily: "var(--font-serif)", fontSize: "var(--t-base)",
+                   lineHeight: "1.7", margin: 0 },
+        }, p),
+      ),
+      mission.clue
+        ? el("div", { class: "stack", style: { gap: "var(--s-2)", marginTop: "var(--s-2)" } },
+            el("div", { class: "subtitle" }, "FIELD HINT"),
+            el("div", { class: "code", style: { fontSize: "var(--t-sm)" } }, mission.clue),
+          )
+        : null,
     ),
-    el("div", { class: "actions" }, openBrief, acceptBtn),
+    el("div", { class: "actions" }, acceptBtn),
   );
 }
