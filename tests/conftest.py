@@ -27,6 +27,23 @@ def _clear_settings_cache():
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _pin_ollama_base_url(monkeypatch):
+    """Pin OLLAMA_BASE_URL to a deterministic test value so respx mocks line up.
+
+    Without this, tests inherit OLLAMA_BASE_URL from whatever .env the test
+    container picked up — which is the production value (self-hosted OLMo 2
+    over Tailscale) on the VPS. The mocks point at https://ollama.example/v1
+    or https://ollama.com/v1 and would never match the production URL,
+    producing AllMockedAssertionError on every mission-generation test.
+
+    Individual tests can still override this via monkeypatch.setenv if they
+    need to test against a specific URL.
+    """
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://ollama.com/v1")
+    get_settings.cache_clear()
+
+
 @pytest_asyncio.fixture
 async def db_session():
     """

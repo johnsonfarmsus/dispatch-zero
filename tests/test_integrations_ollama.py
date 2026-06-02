@@ -107,3 +107,73 @@ async def test_chat_raises_when_no_api_key():
     )
     with pytest.raises(OllamaError, match="api key"):
         await client.chat([{"role": "user", "content": "x"}])
+
+
+# ---------- chat_structured (grammar-forced JSON schema) ----------
+
+_TEST_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["x"],
+    "properties": {"x": {"type": "integer"}},
+}
+
+
+@pytest.mark.asyncio
+async def test_chat_structured_sends_json_schema_response_format():
+    """chat_structured should put the schema into response_format.json_schema,
+    which is what Ollama's structured-output backend (and OpenAI's strict
+    mode) honors."""
+    client = OllamaClient(
+        api_key="k", base_url="https://ollama.example/v1", model="m"
+    )
+    with respx.mock:
+        route = respx.post("https://ollama.example/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_chat_response('{"x": 7}'))
+        )
+        out = await client.chat_structured(
+            [{"role": "user", "content": "hi"}],
+            schema=_TEST_SCHEMA,
+            schema_name="t",
+        )
+    assert out == '{"x": 7}'
+    body = json.loads(route.calls.last.request.read())
+    assert body["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "t",
+            "strict": True,
+            "schema": _TEST_SCHEMA,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_chat_structured_retries_on_5xx_like_chat():
+    """Transport retry should apply equally to both chat modes."""
+    client = OllamaClient(
+        api_key="k", base_url="https://ollama.example/v1", model="m"
+    )
+    with respx.mock:
+        route = respx.post("https://ollama.example/v1/chat/completions").mock(
+            side_effect=[
+                httpx.Response(503),
+                httpx.Response(200, json=_chat_response('{"x": 1}')),
+            ]
+        )
+        out = await client.chat_structured(
+            [{"role": "user", "content": "hi"}], schema=_TEST_SCHEMA
+        )
+    assert out == '{"x": 1}'
+    assert route.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_chat_structured_raises_when_no_api_key():
+    client = OllamaClient(
+        api_key="", base_url="https://ollama.example/v1", model="m"
+    )
+    with pytest.raises(OllamaError, match="api key"):
+        await client.chat_structured(
+            [{"role": "user", "content": "x"}], schema=_TEST_SCHEMA
+        )

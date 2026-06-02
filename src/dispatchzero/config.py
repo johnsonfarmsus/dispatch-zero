@@ -21,11 +21,15 @@ class Settings(BaseSettings):
     login_rate_limit_max: int = 5
     login_rate_limit_window_seconds: int = 60 * 15  # 15 min
 
-    # Ollama Cloud
+    # Briefing AI — any OpenAI-compatible chat endpoint.
+    # Defaults point at Ollama Cloud's hosted gpt-oss; production overrides
+    # via env to a self-hosted OLMo 2 13B endpoint over Tailscale. Timeout is
+    # set generously (60s) so a slow inference box doesn't fail mid-briefing —
+    # the cloud overrides this in dev/.env if it wants a tighter bound.
     ollama_api_key: str = ""
     ollama_base_url: str = "https://ollama.com/v1"
     ollama_model: str = "gpt-oss:120b"
-    ollama_timeout_seconds: int = 15
+    ollama_timeout_seconds: int = 60
 
     # Photo capture and verification
     photo_upload_dir: str = "/uploads"

@@ -10,17 +10,27 @@ from typing import Literal
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
 _JSON_CONTRACT = """
-You MUST respond with a single JSON object containing exactly these fields:
-{
-  "dispatch_summary": "<2-3 short lines, max 280 characters, the spoken-out preview>",
-  "briefing_text": "<full mission text, 100-1800 characters, paragraph-formatted>",
-  "clue": "<one short directional or atmospheric hint, max 200 characters>",
-  "badge_framing": "<short evocative name for any badge earned, max 80 characters>"
-}
+OUTPUT FORMAT — strict.
 
-The handler is the same character (Zero) across all three organizations, with a
-style-appropriate role title. Sign briefings using the title shown in your style
-brief. Never invent other persona names (no Vale, Ashford, or other surnames).
+Respond with EXACTLY ONE JSON object. No prose. No markdown. No code fences.
+No commentary before or after. The object MUST contain all four of these
+fields, in any order:
+
+  dispatch_summary  string,  1-280  characters  — spoken-out preview, 2-3 short lines
+  briefing_text     string,  100-1800 characters — full mission text, paragraph form
+  clue              string OR null, up to 200 characters — one short directional or atmospheric hint
+  badge_framing     string OR null, up to 80 characters  — short evocative name for any badge earned
+
+If a value is not applicable, use JSON null — do NOT use empty strings, "N/A",
+or omit the field. All four keys MUST appear.
+
+Stay under the character caps. If your draft is too long, shorten it before
+emitting the JSON.
+
+The handler is the same character (Zero) across all three organizations, with
+a style-appropriate role title. Sign briefings using ONLY the title shown in
+your style brief. Never invent other persona names (no Vale, Ashford, Warden,
+or other surnames).
 """
 
 _BRIEFING_DOCTRINE = """
@@ -44,11 +54,14 @@ it should have. We want a current photograph. — Professor Zero.'
 """
 
 _SIGN_OFF_RULE = (
-    " When you sign a briefing, sign with the name alone — '— Professor Zero', "
-    "'— Director Zero', or '— Guildmaster Zero' as appropriate. NEVER append a "
-    "tagline, closing sentence, valediction, or stage direction after the name "
-    "(no 'Do be careful', 'End of dispatch', 'The matter is noted', 'Stay sharp', etc.). "
-    "Just the name."
+    " SIGN-OFF RULE — strict. End the briefing_text with the title on its own "
+    "line: '— Professor Zero', '— Director Zero', or '— Guildmaster Zero' as "
+    "appropriate to your style. After the name, write NOTHING. "
+    "Forbidden after the name: any tagline ('Do be careful', 'Stay sharp', "
+    "'Safe travels'), any closing ('End of dispatch', 'Out', 'Over'), any "
+    "valediction ('Yours', 'Regards'), any stage direction, any additional "
+    "sentence of any kind. The em-dash + title is the final text. Stop. "
+    "Do not append a postscript."
 )
 
 _PULP_SYSTEM = (
@@ -116,11 +129,18 @@ def build_mission_prompt(
         f"Target: {place_name} (category: {place_category}).{description_line}\n\n"
         f"The operative will travel there, photograph it as proof, and return. "
         f"Address {callsign} directly. Make the briefing feel like an assignment "
-        f"with stakes — cryptic, in-character, with the operative's task front and "
-        f"centre. Do NOT write a history of the target. Do not invent coordinates, "
-        f"addresses, or grid references — they already have the location on their "
-        f"map.\n\n"
-        f"Respond with the JSON object as specified."
+        f"with stakes — cryptic, in-character, with the operative's task front "
+        f"and centre.\n\n"
+        f"DO NOT write a history of the target. Do not state when it was built, "
+        f"who built it, who lived there, or what it is famous for — the operative "
+        f"already knows that from their dossier. Use any flavor reference as "
+        f"one sentence of colour at most.\n\n"
+        f"DO NOT invent coordinates, addresses, street names, grid references, "
+        f"or compass bearings — the operative already has the location on their "
+        f"map. Speak in terms of the target itself ('the bell tower', 'the south "
+        f"wall'), not navigation.\n\n"
+        f"Respond with the JSON object as specified. Output the JSON only — "
+        f"nothing before it, nothing after it, no markdown fences."
     )
 
     return [

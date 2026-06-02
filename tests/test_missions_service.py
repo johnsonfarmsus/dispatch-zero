@@ -8,8 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.models import Mission, Place, User
+from dispatchzero.schemas.missions import MissionContent
 from dispatchzero.services.missions import (
     MissionGenerationError,
+    _ensure_signoff,
     _strip_markdown_fences,
     get_or_generate_mission,
 )
@@ -33,6 +35,51 @@ def test_strip_markdown_fences_passes_through_unwrapped_json():
 def test_strip_markdown_fences_handles_leading_whitespace():
     raw = '\n\n```json\n{"x": 1}\n```\n'
     assert _strip_markdown_fences(raw) == '{"x": 1}'
+
+
+# ---------- _ensure_signoff ----------
+
+def _content(briefing: str) -> MissionContent:
+    return MissionContent(
+        dispatch_summary="Summary.",
+        briefing_text=briefing,
+        clue=None,
+        badge_framing=None,
+    )
+
+
+def test_ensure_signoff_appends_when_missing_agency():
+    c = _content("Travel to the target. Be quick.")
+    out = _ensure_signoff(c, style="agency")
+    assert out.briefing_text.endswith("— Director Zero")
+
+
+def test_ensure_signoff_appends_when_missing_pulp():
+    c = _content("To the church, my friend, swiftly.")
+    out = _ensure_signoff(c, style="pulp")
+    assert out.briefing_text.endswith("— Professor Zero")
+
+
+def test_ensure_signoff_appends_when_missing_guild():
+    c = _content("Witness the trailhead. Leave no trace.")
+    out = _ensure_signoff(c, style="guild")
+    assert out.briefing_text.endswith("— Guildmaster Zero")
+
+
+def test_ensure_signoff_noop_when_already_present():
+    """If the model signed off correctly, leave the briefing untouched."""
+    c = _content("Travel to the target. Be quick.\n\n— Director Zero")
+    out = _ensure_signoff(c, style="agency")
+    assert out.briefing_text == c.briefing_text
+
+
+def test_ensure_signoff_respects_2200_char_cap():
+    """If appending would breach the schema cap, trim the body first."""
+    long_body = "x" * 2200
+    c = _content(long_body)
+    out = _ensure_signoff(c, style="guild")
+    assert len(out.briefing_text) <= 2200
+    assert out.briefing_text.endswith("— Guildmaster Zero")
 
 
 async def _make_user_and_place(db: AsyncSession) -> tuple[User, Place]:
@@ -163,18 +210,53 @@ async def test_unknown_place_raises(db_session):
 
 
 @pytest.mark.asyncio
-async def test_malformed_ollama_json_raises(db_session, monkeypatch):
+async def test_malformed_ollama_json_raises_after_repair_retry(db_session, monkeypatch):
+    """Two failures in a row (initial + repair retry) surface an error.
+    The retry path is exercised — respx.mock returns the wrong-shape payload
+    BOTH times, so we expect MissionGenerationError and 2 calls (not 1)."""
     monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
     user, place = await _make_user_and_place(db_session)
 
     with respx.mock:
-        respx.post("https://ollama.com/v1/chat/completions").mock(
+        route = respx.post("https://ollama.com/v1/chat/completions").mock(
             return_value=httpx.Response(200, json=_ollama_response({"wrong_shape": True}))
         )
-        with pytest.raises(MissionGenerationError):
+        with pytest.raises(MissionGenerationError, match="repair retry"):
             await get_or_generate_mission(
                 db=db_session, user=user, place_id=place.id, adventure_style="agency"
             )
+    assert route.call_count == 2, "should attempt repair before giving up"
+
+
+@pytest.mark.asyncio
+async def test_repair_retry_recovers_from_first_bad_output(db_session, monkeypatch):
+    """When the first generation is invalid but the repair retry produces a
+    valid MissionContent, the mission persists normally — no error surfaced.
+    This is the path that turns 'flaky 13B model' into 'reliable production
+    behavior'."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    good_payload = {
+        "dispatch_summary": "Document the Test Sculpture.",
+        "briefing_text": "Travel to the Test Sculpture and capture proof.",
+        "clue": None,
+        "badge_framing": None,
+    }
+    with respx.mock:
+        route = respx.post("https://ollama.com/v1/chat/completions").mock(
+            side_effect=[
+                # First attempt: invalid shape
+                httpx.Response(200, json=_ollama_response({"wrong_shape": True})),
+                # Repair retry: valid
+                httpx.Response(200, json=_ollama_response(good_payload)),
+            ]
+        )
+        mission = await get_or_generate_mission(
+            db=db_session, user=user, place_id=place.id, adventure_style="agency"
+        )
+    assert mission.dispatch_summary == "Document the Test Sculpture."
+    assert route.call_count == 2
 
 
 @pytest.mark.asyncio
