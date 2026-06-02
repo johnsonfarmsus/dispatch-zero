@@ -185,6 +185,12 @@ def test_excluded_by_name_predicate():
     assert _excluded_by_name("Sunny Day Daycare")
     assert _excluded_by_name("Tiny Tots Preschool")
     assert _excluded_by_name("Lincoln Elementary")  # without "school" suffix
+    # Airport-family exclusions — secured perimeters, no public foot access
+    assert _excluded_by_name("Spokane International Airport")
+    assert _excluded_by_name("Felts Field Airfield")
+    assert _excluded_by_name("Backcountry Airstrip")
+    assert _excluded_by_name("Runway 27 Marker")
+    assert _excluded_by_name("Terminal B Lobby")
     # Misses — should pass through
     assert not _excluded_by_name("Old Town Mural")
     assert not _excluded_by_name("Riverfront Park")
