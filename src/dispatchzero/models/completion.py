@@ -10,10 +10,21 @@ from dispatchzero.models.base import Base
 
 
 class LocationReason(StrEnum):
-    GONE = "gone"
+    """Why a user gave a place a 👎.
+
+    Collapsed from a previous 4-value enum (gone / not_found / inaccessible /
+    unsafe) — for routing purposes the only distinction that matters is
+    "stop sending people here" vs "user couldn't find it":
+
+    - UNREACHABLE: gone, demolished, fenced off, dangerous — same answer:
+      retire / flag the place. Migration 0009 backfilled gone+inaccessible+
+      unsafe → unreachable.
+    - NOT_FOUND: user couldn't locate it (wrong coords, no signage, missed it
+      in the dark). Could be the user's miss OR a coordinate problem — needs
+      more reports before action.
+    """
+    UNREACHABLE = "unreachable"
     NOT_FOUND = "not_found"
-    INACCESSIBLE = "inaccessible"
-    UNSAFE = "unsafe"
 
 
 class MissionReason(StrEnum):

@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-LocationReason = Literal["gone", "not_found", "inaccessible", "unsafe"]
+LocationReason = Literal["unreachable", "not_found"]
 MissionReason = Literal["bland", "inaccurate", "wrong_tone", "confusing"]
 
 

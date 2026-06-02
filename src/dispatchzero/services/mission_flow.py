@@ -227,10 +227,25 @@ async def _place_lat_lng(db: AsyncSession, place_id: uuid.UUID) -> tuple[float, 
 
 
 async def _apply_auto_retire(db: AsyncSession, *, place_id: uuid.UUID) -> None:
-    """If 3+ of the last 5 location ratings on this place are 'down', flag it."""
+    """Flag a place for review based on recent rating signal.
+
+    Two independent rules trigger FLAGGED (which hides the place from
+    discovery but leaves the row for admin review — only Trevor manually
+    moves to RETIRED):
+
+    - **General negativity**: 3+ of the last 5 up/down ratings are 'down'.
+      Catches places that are boring, hard to enjoy, or just consistently
+      disappointing.
+    - **Unreachable fast-flag**: 2+ of the last 5 down-rated completions
+      carry `location_reason='unreachable'`. Catches phantom GNIS rows and
+      demolished/fenced-off places faster than waiting for 5 total ratings.
+
+    Either rule firing is sufficient. We never auto-retire — that's a human
+    judgment call after looking at the photos/reasons.
+    """
     rows = (
         await db.execute(
-            select(Completion.location_rating)
+            select(Completion.location_rating, Completion.location_reason)
             .where(
                 Completion.place_id == place_id,
                 Completion.location_rating.in_(["up", "down"]),
@@ -238,10 +253,21 @@ async def _apply_auto_retire(db: AsyncSession, *, place_id: uuid.UUID) -> None:
             .order_by(desc(Completion.completed_at))
             .limit(5)
         )
-    ).scalars().all()
-    if len(rows) < 5:
-        return
-    if sum(1 for r in rows if r == "down") >= 3:
+    ).all()
+
+    downs = sum(1 for rating, _ in rows if rating == "down")
+    unreachable_reports = sum(
+        1 for rating, reason in rows
+        if rating == "down" and reason == "unreachable"
+    )
+
+    # Rule 1: general negativity needs 5 ratings to fire (existing behavior).
+    rule_general = len(rows) >= 5 and downs >= 3
+    # Rule 2: unreachable fast-flag fires as soon as 2 such reports exist,
+    # even before 5 total ratings — phantom places shouldn't keep dispatching.
+    rule_unreachable = unreachable_reports >= 2
+
+    if rule_general or rule_unreachable:
         await db.execute(
             update(Place)
             .where(Place.id == place_id)

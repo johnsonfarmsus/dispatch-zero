@@ -147,3 +147,102 @@ async def test_auto_retire_fires_on_three_of_five_negatives(
         await db_session.execute(select(Place).where(Place.id == place.id))
     ).scalar_one()
     assert refreshed.status == "flagged"
+
+
+@pytest.mark.asyncio
+async def test_two_unreachable_reports_fast_flag_place(
+    db_session, tmp_path, monkeypatch,
+):
+    """Phantom GNIS rows: two 'unreachable' reports flag immediately,
+    without waiting for 5 total ratings."""
+    monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
+    user, place, mission = await _seed(db_session)
+    import secrets
+    # One prior unreachable completion (not enough on its own)
+    db_session.add(Completion(
+        user_id=user.id, mission_id=mission.id, place_id=place.id,
+        verified=True, location_rating="down", location_reason="unreachable",
+        share_token=secrets.token_urlsafe(7),
+    ))
+    await db_session.commit()
+
+    # Place should still be active — one unreachable doesn't flag
+    place_after_one = (
+        await db_session.execute(select(Place).where(Place.id == place.id))
+    ).scalar_one()
+    assert place_after_one.status == "active"
+
+    # Second unreachable from a fresh completion — should fast-flag
+    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    second = await capture_mission(
+        db=db_session, user=user, mission=mission, place=place,
+        raw_photo=raw,
+        capture_lat=47.6605, capture_lng=-117.4198, capture_accuracy_m=8.0,
+    )
+    await rate_completion(
+        db=db_session, user=user, completion=second,
+        location_rating="down", mission_rating=None,
+        location_reason="unreachable",
+    )
+    refreshed = (
+        await db_session.execute(select(Place).where(Place.id == place.id))
+    ).scalar_one()
+    assert refreshed.status == "flagged"
+
+
+@pytest.mark.asyncio
+async def test_one_unreachable_plus_one_not_found_does_not_flag(
+    db_session, tmp_path, monkeypatch,
+):
+    """Soft signal: not_found is a weaker reason than unreachable. Mixed
+    reasons require the standard 3-of-5 threshold before flagging."""
+    monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
+    user, place, mission = await _seed(db_session)
+    import secrets
+    db_session.add(Completion(
+        user_id=user.id, mission_id=mission.id, place_id=place.id,
+        verified=True, location_rating="down", location_reason="unreachable",
+        share_token=secrets.token_urlsafe(7),
+    ))
+    await db_session.commit()
+
+    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    second = await capture_mission(
+        db=db_session, user=user, mission=mission, place=place,
+        raw_photo=raw,
+        capture_lat=47.6605, capture_lng=-117.4198, capture_accuracy_m=8.0,
+    )
+    await rate_completion(
+        db=db_session, user=user, completion=second,
+        location_rating="down", mission_rating=None,
+        location_reason="not_found",
+    )
+    refreshed = (
+        await db_session.execute(select(Place).where(Place.id == place.id))
+    ).scalar_one()
+    # Only 1 unreachable + 1 not_found — neither rule fires
+    assert refreshed.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_unreachable_reason_persists_on_completion(
+    db_session, tmp_path, monkeypatch,
+):
+    monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
+    user, place, mission = await _seed(db_session)
+    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    completion = await capture_mission(
+        db=db_session, user=user, mission=mission, place=place,
+        raw_photo=raw,
+        capture_lat=47.6605, capture_lng=-117.4198, capture_accuracy_m=8.0,
+    )
+    await rate_completion(
+        db=db_session, user=user, completion=completion,
+        location_rating="down", mission_rating=None,
+        location_reason="unreachable",
+    )
+    refreshed = (
+        await db_session.execute(select(Completion).where(Completion.id == completion.id))
+    ).scalar_one()
+    assert refreshed.location_reason == "unreachable"
+    assert refreshed.location_rating == "down"
