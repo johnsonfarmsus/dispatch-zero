@@ -8,6 +8,7 @@ _CATEGORY_BONUS: dict[PlaceCategory, float] = {
     PlaceCategory.SCULPTURE: 1.2,
     PlaceCategory.MEMORIAL: 1.0,
     PlaceCategory.HISTORIC: 0.8,
+    PlaceCategory.CHURCH: 0.8,
     PlaceCategory.VIEWPOINT: 0.4,
 }
 

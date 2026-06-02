@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 import redis.asyncio as aioredis
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from dispatchzero.services.scoring import ScoreInput, score_place
 
 _RE_ENTRY_DAYS = 90
 
-Source = Literal["overpass", "wikipedia"]
+Source = Literal["overpass", "wikipedia", "local"]
 
 # Safety filter: never direct users to places primarily occupied by minors.
 # Substring match (case-insensitive). False positives (e.g. "Old Schoolhouse
@@ -68,6 +68,8 @@ async def discover_nearby(
         stored = await _ingest_overpass(db, redis, lat, lng, radius_m, cats, broad)
     elif source == "wikipedia":
         stored = await _ingest_wikipedia(db, redis, lat, lng, radius_m)
+    elif source == "local":
+        stored = await _ingest_local(db, lat, lng, radius_m)
     else:
         raise ValueError(f"unknown source: {source!r}")
 
@@ -158,6 +160,33 @@ async def _ingest_wikipedia(
         return stored
     finally:
         await wp.aclose()
+
+
+async def _ingest_local(
+    db: AsyncSession,
+    lat: float,
+    lng: float,
+    radius_m: int,
+) -> list[Place]:
+    """Query the places table directly via PostGIS for any pre-stored places
+    within radius. Used as the last tier — surfaces curated/imported data
+    (GNIS, future manual entries) when external sources came up empty.
+
+    Doesn't hit any external API. Returns whatever the DB has within radius
+    of (lat, lng); downstream eligibility + scoring filters do the rest.
+    """
+    # ST_DWithin on geography type uses meters directly. Wrap the point
+    # literal in ST_GeogFromText so the planner sees both args as geography
+    # (asyncpg's typed-bind path won't auto-cast a bare string).
+    target = func.ST_GeogFromText(f"SRID=4326;POINT({lng} {lat})")
+    rows = (
+        await db.execute(
+            select(Place).where(
+                func.ST_DWithin(Place.coordinates, target, radius_m)
+            )
+        )
+    ).scalars().all()
+    return list(rows)
 
 
 # ---- upserts ----

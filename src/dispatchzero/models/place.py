@@ -16,6 +16,7 @@ class PlaceCategory(StrEnum):
     MEMORIAL = "memorial"
     HISTORIC = "historic"
     VIEWPOINT = "viewpoint"
+    CHURCH = "church"
 
 
 class PlaceStatus(StrEnum):

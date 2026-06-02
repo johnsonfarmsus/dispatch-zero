@@ -87,7 +87,9 @@ def build_query(
 ) -> str:
     parts: list[str] = []
     for cat in categories:
-        filters = list(_CATEGORY_FILTERS[cat])
+        # Some categories (e.g. CHURCH) intentionally have no OSM query —
+        # they're sourced exclusively from GNIS / the local DB tier.
+        filters = list(_CATEGORY_FILTERS.get(cat, []))
         if broad:
             filters.extend(_BROAD_CATEGORY_FILTERS.get(cat, []))
         for filt in filters:

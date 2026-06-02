@@ -160,6 +160,7 @@ _REQUEST_TIERS: list[tuple[int, str, bool]] = [
     (5000, "overpass", False),   # Tier 1: 5km strict OSM
     (5000, "overpass", True),    # Tier 2: 5km broad OSM (parks, peaks, churches, etc)
     (5000, "wikipedia", False),  # Tier 3: 5km Wikipedia geosearch (global coverage)
+    (5000, "local", False),      # Tier 4: 5km local DB (GNIS imports + any other curated data)
 ]
 
 
