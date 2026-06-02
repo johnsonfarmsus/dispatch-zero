@@ -9,7 +9,10 @@ _CATEGORY_BONUS: dict[PlaceCategory, float] = {
     PlaceCategory.MEMORIAL: 1.0,
     PlaceCategory.HISTORIC: 0.8,
     PlaceCategory.CHURCH: 0.8,
+    PlaceCategory.INFRASTRUCTURE: 0.6,  # dams, bridges, towers — engineering interest
+    PlaceCategory.PARK: 0.5,            # parks, falls, trailheads — outdoor scenic
     PlaceCategory.VIEWPOINT: 0.4,
+    PlaceCategory.CIVIC: 0.3,           # post offices — functional but everyday
 }
 
 

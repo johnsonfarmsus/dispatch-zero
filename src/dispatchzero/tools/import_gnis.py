@@ -1,22 +1,24 @@
-"""USGS GNIS importer — load Churches and Cemeteries into the places table.
+"""USGS GNIS importer — load cultural features into the places table.
 
 GNIS (Geographic Names Information System) is a USGS dataset of named
 geographic features, public domain. We use it as a fallback location source
-for rural areas where OSM and Wikipedia are sparse.
+for areas where OSM and Wikipedia are sparse.
 
-Download a state file from
-https://www.usgs.gov/u.s.-board-on-geographic-names/download-gnis-data
-and pass it via --file. Pipe- OR comma-delimited; the importer sniffs the
-header row and reads by column name so format quirks across GNIS releases
-don't break us.
+NOTE: USGS removed cultural feature classes (churches, cemeteries, post
+offices, etc.) from the GNIS Domestic Names dataset in 2021. To get those,
+use a pre-2021 snapshot — e.g. the Wayback Machine copy of
+https://geonames.usgs.gov/docs/stategaz/WA_Features.zip. The 2020 file is
+known to work; pipe-delimited with an UPPERCASE header. The importer's
+column lookup is case + punctuation tolerant so both old and new formats
+parse.
 
 Usage (inside the app container on VPS 2):
 
     docker compose -f docker-compose.yml -f docker-compose.prod.yml exec app \\
         python -m dispatchzero.tools.import_gnis \\
-        --file /uploads/imports/WA_Features.csv \\
-        --counties rural_wa \\
-        --categories church,cemetery
+        --file /uploads/imports/legacy/WA_Features_20200301.txt \\
+        --counties all \\
+        --categories church,cemetery,park,falls,trail,dam,bridge,tower,post_office
 
 Idempotent: re-running upserts (osm_type='gnis', osm_id=feature_id is the
 unique key on the places table, same pattern Wikipedia entries use).
@@ -37,9 +39,20 @@ from dispatchzero.services.discovery import _excluded_by_name
 
 
 # Map GNIS Feature Class → our PlaceCategory.
+# Cemetery stays HISTORIC (graveyards genuinely fit that bucket).
+# Dam/Bridge/Tower group as INFRASTRUCTURE — engineering landmarks.
+# Park/Falls/Trail group as PARK — outdoor scenic.
+# Post Office gets its own CIVIC bucket — small-town civic landmark.
 _CLASS_MAP: dict[str, PlaceCategory] = {
     "Church": PlaceCategory.CHURCH,
     "Cemetery": PlaceCategory.HISTORIC,
+    "Park": PlaceCategory.PARK,
+    "Falls": PlaceCategory.PARK,
+    "Trail": PlaceCategory.PARK,
+    "Dam": PlaceCategory.INFRASTRUCTURE,
+    "Bridge": PlaceCategory.INFRASTRUCTURE,
+    "Tower": PlaceCategory.INFRASTRUCTURE,
+    "Post Office": PlaceCategory.CIVIC,
 }
 
 
@@ -90,13 +103,21 @@ def _row_to_place_args(row: list[str], idx: dict[str, int]) -> dict | None:
         return None
     if _excluded_by_name(name):
         return None
-    # Skip ambient-named entries that aren't useful as dispatch targets.
-    if name.lower() in {"church", "cemetery"} or name.lower().startswith("unnamed"):
+    # Skip ambient-named entries where the "name" is just the feature class.
+    bare_names = {
+        "church", "cemetery", "park", "dam", "falls", "tower",
+        "bridge", "trail", "post office",
+    }
+    if name.lower() in bare_names or name.lower().startswith("unnamed"):
+        return None
+    # Skip legacy GNIS "(historical)" suffix — those are demolished or relocated.
+    if name.lower().rstrip(" .").endswith("(historical)"):
         return None
     return {
         "feature_id": feature_id,
         "name": name,
         "category": _CLASS_MAP[feature_class],
+        "feature_class": feature_class,
         "county": county,
         "lat": lat,
         "lng": lng,
@@ -108,6 +129,12 @@ async def _upsert_places(db, rows: list[dict]) -> int:
     if not rows:
         return 0
     for r in rows:
+        # gnis_class lets us audit/filter by the original GNIS feature class
+        # later (e.g. "show me only Dams"). Defaults to None for rows from the
+        # test fixtures that don't include it.
+        tags = {"source": "gnis", "county": r["county"]}
+        if r.get("feature_class"):
+            tags["gnis_class"] = r["feature_class"]
         stmt = (
             pg_insert(Place)
             .values(
@@ -117,7 +144,7 @@ async def _upsert_places(db, rows: list[dict]) -> int:
                 name=r["name"],
                 category=r["category"].value,
                 coordinates=f"SRID=4326;POINT({r['lng']} {r['lat']})",
-                tags={"source": "gnis", "county": r["county"]},
+                tags=tags,
                 description=None,
                 wikidata_id=None,
             )
@@ -127,7 +154,7 @@ async def _upsert_places(db, rows: list[dict]) -> int:
                     "name": r["name"],
                     "category": r["category"].value,
                     "coordinates": f"SRID=4326;POINT({r['lng']} {r['lat']})",
-                    "tags": {"source": "gnis", "county": r["county"]},
+                    "tags": tags,
                 },
             )
         )
@@ -140,9 +167,13 @@ async def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--file", required=True, type=Path,
                         help="Path to the downloaded GNIS state/national CSV/PSV")
-    parser.add_argument("--categories", default="church,cemetery",
-                        help="Comma list of categories to import (church,cemetery,...)")
-    parser.add_argument("--counties", default="rural_wa",
+    parser.add_argument(
+        "--categories",
+        default="church,cemetery,park,falls,trail,dam,bridge,tower,post_office",
+        help=("Comma list of categories. Supported: church, cemetery, park, "
+              "falls, trail, dam, bridge, tower, post_office."),
+    )
+    parser.add_argument("--counties", default="all",
                         help=("Named filter ('rural_wa') or comma list of county names. "
                               "Use 'all' to disable county filtering."))
     parser.add_argument("--dry-run", action="store_true",
@@ -153,6 +184,15 @@ async def _main() -> None:
     cat_aliases = {
         "church": "Church",
         "cemetery": "Cemetery",
+        "park": "Park",
+        "falls": "Falls",
+        "trail": "Trail",
+        "dam": "Dam",
+        "bridge": "Bridge",
+        "tower": "Tower",
+        "post_office": "Post Office",
+        "post-office": "Post Office",
+        "postoffice": "Post Office",
     }
     wanted_classes = {cat_aliases[c.strip().lower()] for c in args.categories.split(",")
                       if c.strip().lower() in cat_aliases}
@@ -172,7 +212,9 @@ async def _main() -> None:
     print(f"  categories (GNIS classes): {sorted(wanted_classes)}")
     print(f"  counties: {sorted(county_filter) if county_filter else 'ALL'}")
 
-    sample = args.file.open(encoding="utf-8").read(4096)
+    # utf-8-sig strips the BOM USGS prepends to the header line; without
+    # this, the first column name parses as "﻿feature_id" and lookups fail.
+    sample = args.file.open(encoding="utf-8-sig").read(4096)
     delim = _sniff_delimiter(sample)
     print(f"  delimiter: {delim!r}")
 
@@ -180,7 +222,7 @@ async def _main() -> None:
     seen_classes: dict[str, int] = {}
     rejected = 0
 
-    with args.file.open(encoding="utf-8", newline="") as fh:
+    with args.file.open(encoding="utf-8-sig", newline="") as fh:
         reader = csv.reader(fh, delimiter=delim)
         header = next(reader)
         idx = {

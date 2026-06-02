@@ -17,6 +17,9 @@ class PlaceCategory(StrEnum):
     HISTORIC = "historic"
     VIEWPOINT = "viewpoint"
     CHURCH = "church"
+    PARK = "park"                    # parks, waterfalls, trailheads — outdoor scenic
+    INFRASTRUCTURE = "infrastructure"  # dams, bridges, towers — engineering landmarks
+    CIVIC = "civic"                  # post offices — small-town civic landmarks
 
 
 class PlaceStatus(StrEnum):
