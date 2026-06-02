@@ -4,12 +4,14 @@ from dispatchzero.models.mission import Mission, MissionStatus
 from dispatchzero.models.mission_stop import MissionStop
 from dispatchzero.models.place import Place, PlaceCategory, PlaceStatus
 from dispatchzero.models.user import AdventureStyle, User
+from dispatchzero.models.user_place_exclusion import ExclusionReason, UserPlaceExclusion
 from dispatchzero.models.user_place_history import UserPlaceHistory
 
 __all__ = [
     "AdventureStyle",
     "Base",
     "Completion",
+    "ExclusionReason",
     "LocationReason",
     "Mission",
     "MissionReason",
@@ -19,5 +21,6 @@ __all__ = [
     "PlaceCategory",
     "PlaceStatus",
     "User",
+    "UserPlaceExclusion",
     "UserPlaceHistory",
 ]

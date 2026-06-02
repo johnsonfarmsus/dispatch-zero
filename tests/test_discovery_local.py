@@ -70,15 +70,17 @@ async def test_local_tier_excludes_places_outside_radius(db_session, redis_clien
 
 
 @pytest.mark.asyncio
-async def test_local_tier_respects_90_day_re_entry_filter(db_session, redis_client):
+async def test_local_tier_respects_re_entry_filter(db_session, redis_client):
+    """Places the user completed within the re-entry window (currently 30 days)
+    are filtered out — they shouldn't be re-dispatched too soon. Test uses
+    10 days to stay well inside the window."""
     user = await _make_user(db_session)
     place = await _seed_gnis_place(
         db_session, name="St Joseph", lat=47.481, lng=-118.255, osm_id=10003,
     )
-    # User completed this place 30 days ago — still inside the 90-day window
     db_session.add(UserPlaceHistory(
         id=uuid.uuid4(), user_id=user.id, place_id=place.id,
-        last_completed_at=datetime.now(timezone.utc) - timedelta(days=30),
+        last_completed_at=datetime.now(timezone.utc) - timedelta(days=10),
     ))
     await db_session.commit()
 

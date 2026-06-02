@@ -92,7 +92,10 @@ async def test_discover_filters_recently_completed_places(db_session, redis_clie
 
 
 @pytest.mark.asyncio
-async def test_discover_includes_old_completion_after_90_days(db_session, redis_client):
+async def test_discover_includes_old_completion_after_re_entry_window(db_session, redis_client):
+    """A place completed outside the re-entry window (currently 30 days) is
+    eligible to be re-dispatched. Test uses 60 days to stay well clear of the
+    boundary regardless of future window tuning."""
     user = await _make_user(db_session)
     with respx.mock:
         respx.post("https://overpass-api.de/api/interpreter").mock(
@@ -107,7 +110,7 @@ async def test_discover_includes_old_completion_after_90_days(db_session, redis_
         history = UserPlaceHistory(
             user_id=user.id,
             place_id=first[0]["id"],
-            last_completed_at=datetime.now(timezone.utc) - timedelta(days=91),
+            last_completed_at=datetime.now(timezone.utc) - timedelta(days=60),
         )
         db_session.add(history)
         await db_session.commit()

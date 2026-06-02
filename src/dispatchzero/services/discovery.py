@@ -10,10 +10,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dispatchzero.integrations.overpass import OverpassClient, OverpassPlace
 from dispatchzero.integrations.wikidata import WikidataClient
 from dispatchzero.integrations.wikipedia import WikipediaClient, WikipediaPlace
-from dispatchzero.models import Place, PlaceCategory, PlaceStatus, User, UserPlaceHistory
+from dispatchzero.models import (
+    Place,
+    PlaceCategory,
+    PlaceStatus,
+    User,
+    UserPlaceExclusion,
+    UserPlaceHistory,
+)
 from dispatchzero.services.scoring import ScoreInput, score_place
 
-_RE_ENTRY_DAYS = 90
+# Re-entry window: a place a user has already completed won't be re-dispatched
+# to them within this window. Dropped from 90 to 30 days when the list-of-
+# candidates UI landed — with multiple candidates per request the lockout
+# matters less than freshness for small-town users with limited local pools.
+# Re-dispatched missions are also force-regenerated (see services.missions —
+# repeat_visit), so a place coming back at day 31 gets a fresh briefing, not
+# the same one the user already read.
+_RE_ENTRY_DAYS = 30
 
 Source = Literal["overpass", "wikipedia", "local"]
 
@@ -84,11 +98,24 @@ async def discover_nearby(
             )
         ).scalars()
     )
+    # User-reported permanent exclusions ("this place isn't really there /
+    # can't be reached"). One report from the user removes it from THEIR
+    # eligibility forever — distinct from the time-windowed completion filter.
+    user_excluded_ids = set(
+        (
+            await db.execute(
+                select(UserPlaceExclusion.place_id).where(
+                    UserPlaceExclusion.user_id == user.id,
+                )
+            )
+        ).scalars()
+    )
 
     eligible = [
         p
         for p in stored
         if p.id not in recent_completed_ids
+        and p.id not in user_excluded_ids
         and p.status == PlaceStatus.ACTIVE.value
         and not _excluded_by_name(p.name)
     ]
