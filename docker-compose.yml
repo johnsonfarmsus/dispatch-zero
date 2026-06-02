@@ -7,6 +7,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      # Init scripts in /docker-entrypoint-initdb.d/ run ONCE on first boot of
+      # an empty data volume. Used to create the dispatchzero_test database
+      # for the pytest suite. No-op on the production VPS (volume already
+      # initialized); only fires for fresh clones and CI.
+      - ./deploy/db-init:/docker-entrypoint-initdb.d:ro
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
