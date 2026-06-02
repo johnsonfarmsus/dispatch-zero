@@ -108,3 +108,34 @@
   color: var(--danger);
   font-size: var(--t-sm);
 }
+
+/* AGPL §13 source-link footer. Intentionally small and unobtrusive but
+   always present so users interacting with this service can locate the
+   corresponding source — see https://www.gnu.org/licenses/agpl-3.0.html */
+.dz-source-footer {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 0);
+  left: 0;
+  right: 0;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0));
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+.dz-source-footer a,
+.dz-source-footer span {
+  pointer-events: auto;
+}
+.dz-source-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+.dz-source-footer a:hover {
+  color: var(--text);
+}

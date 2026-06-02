@@ -1,0 +1,28 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Seed .env from example
+        run: cp .env.example .env
+      - name: Build test image
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml build test
+      - name: Run pytest
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test pytest --tb=short -q
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --tail=200 || true

@@ -19,3 +19,6 @@ caddy_config/
 
 # Tools
 .claude/
+
+# Blog drafts (not part of the codebase)
+blog/

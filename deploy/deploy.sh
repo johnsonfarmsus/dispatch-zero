@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
+# Deploy Dispatch Zero to a remote VPS over SSH.
+#
+# Configure with environment variables (e.g. in your shell rc):
+#   export DZ_VPS_HOST="root@your-server.example.com"
+#   export DZ_REMOTE_DIR="/opt/dispatchzero"          # optional, this is the default
+#   export DZ_HEALTHCHECK_URL="https://your-instance.example.com/healthz"  # optional
+#
+# Then: ./deploy/deploy.sh
 set -euo pipefail
 
-VPS_HOST="root@89.167.39.152"
-REMOTE_DIR="/opt/dispatchzero"
+# Optional: source local deployment overrides (host, dir, healthcheck url).
+# Keep this file gitignored — it's per-developer machine config.
+if [[ -f "$(dirname "$0")/.env.local" ]]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/.env.local"
+fi
+
+VPS_HOST="${DZ_VPS_HOST:?set DZ_VPS_HOST=user@host (e.g. root@your-server.example.com)}"
+REMOTE_DIR="${DZ_REMOTE_DIR:-/opt/dispatchzero}"
+HEALTHCHECK_URL="${DZ_HEALTHCHECK_URL:-}"
 
 echo "[1/4] syncing source to ${VPS_HOST}:${REMOTE_DIR}"
 # CRITICAL: --exclude 'uploads' protects runtime user data (capture photos
@@ -31,5 +47,9 @@ ssh "${VPS_HOST}" "cd ${REMOTE_DIR} && docker compose -f docker-compose.yml -f d
 
 echo "[4/4] healthcheck"
 sleep 5
-curl -fsS https://dispatchzero.ataary.com/healthz && echo
+if [[ -n "${HEALTHCHECK_URL}" ]]; then
+  curl -fsS "${HEALTHCHECK_URL}" && echo
+else
+  ssh "${VPS_HOST}" "curl -fsS http://localhost:8000/healthz" && echo
+fi
 echo "deploy ok"

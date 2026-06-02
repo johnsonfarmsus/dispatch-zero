@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
+# Run the pytest suite on the remote VPS (via docker compose).
+# Configure with DZ_VPS_HOST / DZ_REMOTE_DIR — see deploy/deploy.sh.
 set -euo pipefail
 
-VPS_HOST="root@89.167.39.152"
-REMOTE_DIR="/opt/dispatchzero"
+# Optional: source local deployment overrides — same file deploy.sh uses.
+if [[ -f "$(dirname "$0")/.env.local" ]]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "$0")/.env.local"
+fi
+
+VPS_HOST="${DZ_VPS_HOST:?set DZ_VPS_HOST=user@host}"
+REMOTE_DIR="${DZ_REMOTE_DIR:-/opt/dispatchzero}"
 
 echo "[1/2] syncing source (including tests) to ${VPS_HOST}:${REMOTE_DIR}"
 rsync -az --delete \
