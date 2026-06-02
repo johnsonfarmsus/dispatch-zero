@@ -33,6 +33,27 @@ export function securityProtocols() {
         "Mission text → Ollama Cloud (place name + callsign + style).",
         "Place lookups → OpenStreetMap, Wikipedia, Wikidata (lat/lng only).",
       ),
+
+      // Source + license block. Constructed manually (rather than via block())
+      // so the GitHub URL can be a real clickable anchor instead of plain text.
+      el("div", { class: "stack", style: { gap: "2px" } },
+        el("div", { class: "subtitle", style: { marginBottom: "2px" } },
+          "Source & license"),
+        el("div", {
+          style: { fontSize: "var(--t-sm)", lineHeight: "1.35", color: "var(--text)" },
+        },
+          "· Source: ",
+          el("a", {
+            href: "https://github.com/johnsonfarmsus/dispatch-zero",
+            target: "_blank", rel: "noopener",
+            style: { color: "var(--text)", borderBottom: "1px dotted currentColor",
+                     textDecoration: "none" },
+          }, "github.com/johnsonfarmsus/dispatch-zero"),
+        ),
+        el("div", {
+          style: { fontSize: "var(--t-sm)", lineHeight: "1.35", color: "var(--text)" },
+        }, "· License: AGPL-3.0 — modifications must stay open."),
+      ),
     ),
     el("div", { class: "actions" },
       el("a", {
