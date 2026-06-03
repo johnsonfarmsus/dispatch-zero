@@ -1,6 +1,9 @@
-// Security Protocols — public, no auth. Tightened to fit a single mobile
-// viewport without scrolling. Header bar already says "protocols", so we
-// drop the page title and tighten inter-section gaps.
+// Security Protocols — public, no auth. Content grew past one viewport once
+// the Source & license block landed, so the content area is .scrollable —
+// the header band ("// dispatch zero //") and the actions footer ("About
+// this project →" / "← Return") stay pinned and the middle scrolls. Inter-
+// section gaps stay tight so on a roomy phone you still see most sections
+// without scrolling.
 import { el } from "../dom.js";
 
 export function securityProtocols() {
@@ -9,7 +12,7 @@ export function securityProtocols() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— protocols"),
     ),
-    el("div", { class: "content stack", style: { gap: "var(--s-3)" } },
+    el("div", { class: "content stack scrollable", style: { gap: "var(--s-3)" } },
       block("What we keep",
         "Callsign + password.",
         "Dispatches + captured photos with metadata removed.",
