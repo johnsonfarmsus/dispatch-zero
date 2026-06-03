@@ -15,7 +15,7 @@ const TAGLINES = {
 export function stylePicker() {
   const current = getUser()?.adventure_style || "agency";
   const errEl = el("div", { class: "fault", hidden: true });
-  const logoutLink = el("a", { href: "#", class: "muted" }, "Stand Down");
+  const logoutLink = el("a", { href: "#", class: "muted" }, "Log Out");
   logoutLink.addEventListener("click", async (e) => {
     e.preventDefault();
     await api.post("/auth/logout", {});
