@@ -39,7 +39,13 @@ export async function home() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "code" }, user.callsign),
     ),
-    el("div", { class: "content stack" },
+    // .scrollable so the History / Settings / Report-POI buttons stay
+    // reachable on smaller viewports (the in-browser case with URL bar +
+    // bottom toolbar eats ~150px more than the PWA does — without scroll
+    // those buttons fall off the bottom edge of the content area before
+    // the user can see them). Request Dispatch and the // security
+    // protocols // link stay pinned in the actions footer regardless.
+    el("div", { class: "content stack scrollable" },
       el("div", { class: "row" },
         el("img", {
           src: `/static/avatars/zero-${user.adventure_style}.png`,
