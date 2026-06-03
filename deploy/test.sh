@@ -13,6 +13,12 @@ VPS_HOST="${DZ_VPS_HOST:?set DZ_VPS_HOST=user@host}"
 REMOTE_DIR="${DZ_REMOTE_DIR:-/opt/dispatchzero}"
 
 echo "[1/2] syncing source (including tests) to ${VPS_HOST}:${REMOTE_DIR}"
+# CRITICAL: --exclude 'uploads' must be present alongside --delete or rsync
+# will mirror "local has no uploads/" to the destination and wipe every
+# captured user photo on the VPS. This script ran ~8 times during the
+# Stage 1-3 push on 2026-06-02 and deleted 5 of Trevor's trip photos
+# before this exclude was added. Same protection as in deploy.sh — do not
+# remove without a different persistence story for /opt/dispatchzero/uploads.
 rsync -az --delete \
   --exclude '.venv' \
   --exclude '__pycache__' \
@@ -22,6 +28,7 @@ rsync -az --delete \
   --exclude '.env' \
   --exclude '.DS_Store' \
   --exclude '.claude' \
+  --exclude 'uploads' \
   ./ "${VPS_HOST}:${REMOTE_DIR}/"
 
 echo "[2/2] running tests on VPS via docker compose run"
