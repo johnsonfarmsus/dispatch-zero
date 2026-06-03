@@ -47,25 +47,33 @@ async def _get_redis(
 
 
 async def _user_to_me(db: AsyncSession, user: User) -> MeOut:
-    # Completion table may not exist yet (Phase 5 migration adds it). Try/except
-    # so that early auth tests against the bare schema continue to pass.
+    # Completion / Submission tables may not exist yet (early-phase migrations
+    # add them). Try/except so that auth tests against the bare schema pass.
     try:
-        from dispatchzero.models import Completion
-        count = (
+        from dispatchzero.services.mission_flow import user_completions_count
+        completions = await user_completions_count(db, user_id=user.id)
+    except Exception:
+        completions = 0
+    try:
+        from dispatchzero.models import Submission, SubmissionStatus
+        pending = (
             await db.execute(
-                select(func.count(Completion.id)).where(Completion.user_id == user.id)
+                select(func.count(Submission.id)).where(
+                    Submission.user_id == user.id,
+                    Submission.status == SubmissionStatus.PENDING.value,
+                )
             )
         ).scalar_one()
     except Exception:
-        count = 0
-    completions = int(count)
+        pending = 0
     return MeOut(
         id=user.id,
         callsign=user.callsign,
         adventure_style=user.adventure_style,
-        completions_count=completions,
+        completions_count=int(completions),
         missions_this_week=user.missions_this_week,
-        rank=completions_to_rank(completions),
+        rank=completions_to_rank(int(completions)),
+        pending_submissions=int(pending),
     )
 
 

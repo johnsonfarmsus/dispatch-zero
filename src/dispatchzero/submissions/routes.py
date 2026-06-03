@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.auth.deps import current_user
 from dispatchzero.db import get_session
-from dispatchzero.models import PlaceCategory, Submission, User
+from dispatchzero.models import Place, PlaceCategory, Submission, User
 from dispatchzero.services.submissions import (
     SubmissionNotFoundError,
     SubmissionRejectedError,
@@ -40,6 +40,19 @@ class SubmissionOut(BaseModel):
     place_id: uuid.UUID
     status: str
     description: str | None
+    share_token: str
+    submitted_at: str  # ISO 8601
+
+
+class SubmissionListItem(BaseModel):
+    """Slimmer payload for dossier-list rendering. Mirrors CompletionListItem
+    so the frontend can stack both into one list ordered by date."""
+    id: uuid.UUID
+    place_id: uuid.UUID
+    place_name: str | None
+    place_category: str
+    description: str | None
+    status: str
     share_token: str
     submitted_at: str  # ISO 8601
 
@@ -96,6 +109,38 @@ async def capture(
         # (EXIF, freshness, content).
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
     return _submission_to_out(submission)
+
+
+@router.get("", response_model=list[SubmissionListItem])
+async def list_submissions(
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> list[SubmissionListItem]:
+    """The current user's submissions, newest first. The dossier screen
+    fetches this alongside /missions/completions and merges the two lists
+    by date so the user sees one unified history."""
+    rows = (
+        await db.execute(
+            select(Submission, Place)
+            .join(Place, Place.id == Submission.place_id)
+            .where(Submission.user_id == user.id)
+            .order_by(Submission.submitted_at.desc())
+            .limit(50)
+        )
+    ).all()
+    return [
+        SubmissionListItem(
+            id=s.id,
+            place_id=p.id,
+            place_name=p.name,
+            place_category=p.category,
+            description=s.description,
+            status=s.status,
+            share_token=s.share_token,
+            submitted_at=s.submitted_at.isoformat(),
+        )
+        for s, p in rows
+    ]
 
 
 @router.get("/{submission_id}", response_model=SubmissionOut)

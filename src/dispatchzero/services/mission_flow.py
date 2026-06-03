@@ -197,17 +197,35 @@ async def rate_completion(
 
 
 async def user_completions_count(db: AsyncSession, user_id: uuid.UUID) -> int:
-    """Total verified completions for a user. Computed; not denormalized."""
-    return int(
-        (
-            await db.execute(
-                select(func.count(Completion.id)).where(
-                    Completion.user_id == user_id,
-                    Completion.verified.is_(True),
-                )
+    """Total rank-events for a user. Computed; not denormalized.
+
+    Counts BOTH:
+    - Verified mission completions (the original sense)
+    - Approved community submissions
+
+    Both involve the user being physically at a location with a camera, and
+    Trevor explicitly wanted submissions to count toward rank rather than
+    sitting as a separate sub-score.
+    """
+    from dispatchzero.models import Submission, SubmissionStatus  # local: avoid cycle
+
+    mission_count = (
+        await db.execute(
+            select(func.count(Completion.id)).where(
+                Completion.user_id == user_id,
+                Completion.verified.is_(True),
             )
-        ).scalar_one()
-    )
+        )
+    ).scalar_one()
+    submission_count = (
+        await db.execute(
+            select(func.count(Submission.id)).where(
+                Submission.user_id == user_id,
+                Submission.status == SubmissionStatus.APPROVED.value,
+            )
+        )
+    ).scalar_one()
+    return int(mission_count) + int(submission_count)
 
 
 # ---- internals ----
