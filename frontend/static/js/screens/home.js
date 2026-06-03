@@ -39,10 +39,12 @@ export async function home() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "code" }, user.callsign),
     ),
-    // No scroll on this screen — the gameplay vibe wants single-page.
-    // Tightened content stack gap (--s-3, default is --s-5) keeps
-    // everything within the in-browser viewport (which loses ~150px to
-    // Safari chrome vs the PWA case).
+    // Single-page gameplay screen — no scroll. The whole action stack
+    // (History/Settings, Report, Request Dispatch) lives in the content
+    // area as one tight group; the actions footer below holds only the
+    // small security-protocols policy link. Tightened content stack gap
+    // (--s-3, default --s-5) keeps everything within the in-browser
+    // viewport.
     el("div", { class: "content stack", style: { gap: "var(--s-3)" } },
       el("div", { class: "row" },
         el("img", {
@@ -62,9 +64,16 @@ export async function home() {
         ),
       ),
       el("div", { class: "divider" }),
-      // The big AGENT / callsign hero was redundant with the callsign in
-      // the header band, and removing it is exactly the ~100px we needed
-      // to free for the in-browser viewport to fit everything.
+      // Callsign hero — restored above the stats but without the AGENT
+      // subtitle (label was redundant with the // dispatch zero // —
+      // CALLSIGN band in the header). The big mono treatment still gives
+      // the operative a personal-card moment without the duplicate prose.
+      el("div", { style: { textAlign: "center" } },
+        el("span", {
+          class: "code",
+          style: { fontSize: "var(--t-2xl)", letterSpacing: "0.04em" },
+        }, user.callsign),
+      ),
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "Rank"),
@@ -107,18 +116,25 @@ export async function home() {
         historyBtn,
         settingsBtn,
       ),
-      // Report button: full-width, slotted between the secondary actions and
-      // the primary Request Dispatch. Distinct visual weight ("--secondary"
-      // styling without the accent border) so it doesn't compete with
-      // Request Dispatch but is still clearly a real action.
+      // Report button — sits in the same stack as History/Settings AND
+      // Request Dispatch below. The whole action group reads as one
+      // visually tight unit.
       el("a", {
         href: "/report", "data-route": true,
         class: "secondary-action",
       }, "Report a Point of Interest"),
-    ),
-    el("div", { class: "actions" },
+      // Request Dispatch — primary action. Lives in the content stack
+      // (not the actions footer) so the gap above it is just the content
+      // stack's --s-3 rather than the actions area's border-top +
+      // padding-top + screen grid gap (~35px of extra separation that
+      // would visually orphan it from the buttons above).
       requestBtn,
       requestStatus,
+    ),
+    el("div", { class: "actions" },
+      // Just the security-protocols policy link down here. It's not a
+      // game action, it's a policy reference — separate row + border
+      // appropriately distinguishes it.
       el("a", {
         href: "/security", "data-route": true,
         class: "muted",
