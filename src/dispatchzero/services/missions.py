@@ -29,12 +29,13 @@ class MissionGenerationError(RuntimeError):
 _MISSION_JSON_SCHEMA: dict = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["dispatch_summary", "briefing_text", "clue", "badge_framing"],
+    "required": ["dispatch_summary", "briefing_text", "clue", "badge_framing", "teaser"],
     "properties": {
         "dispatch_summary": {"type": "string"},
         "briefing_text": {"type": "string"},
         "clue": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "badge_framing": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "teaser": {"type": "string"},
     },
 }
 
@@ -42,13 +43,14 @@ _MISSION_JSON_SCHEMA: dict = {
 # parse or fails Pydantic validation. Pushes the model to recover from
 # over-length or malformed output without re-running the whole prompt.
 _REPAIR_NUDGE = (
-    "Return ONLY the JSON object with exactly these four fields "
-    "(dispatch_summary, briefing_text, clue, badge_framing). "
+    "Return ONLY the JSON object with exactly these five fields "
+    "(dispatch_summary, briefing_text, clue, badge_framing, teaser). "
     "No prose, no markdown, no commentary. "
     "dispatch_summary must be at most 400 characters. "
     "briefing_text must be at most 2200 characters. "
     "clue at most 240 characters or null. "
-    "badge_framing at most 120 characters or null."
+    "badge_framing at most 120 characters or null. "
+    "teaser at most 140 characters (a single in-voice sentence that names the place)."
 )
 
 
@@ -116,6 +118,7 @@ async def get_or_generate_mission(
         briefing_text=content.briefing_text,
         clue=content.clue,
         badge_framing=content.badge_framing,
+        teaser=content.teaser,
         ai_model=settings.ollama_model,
         repeat_visit=is_repeat,
     )

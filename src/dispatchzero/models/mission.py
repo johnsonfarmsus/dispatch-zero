@@ -31,6 +31,10 @@ class Mission(Base):
     briefing_text: Mapped[str] = mapped_column(String(2200), nullable=False)
     clue: Mapped[str | None] = mapped_column(String(240), nullable=True)
     badge_framing: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # In-voice one-liner shown in the candidate-list UI. Nullable so missions
+    # generated before Stage 3 (the list UI rollout) don't break — they just
+    # surface in the dossier without a teaser line.
+    teaser: Mapped[str | None] = mapped_column(String(140), nullable=True)
 
     mission_thumbs_up: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     mission_thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

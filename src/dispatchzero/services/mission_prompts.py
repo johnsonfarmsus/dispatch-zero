@@ -13,16 +13,32 @@ _JSON_CONTRACT = """
 OUTPUT FORMAT — strict.
 
 Respond with EXACTLY ONE JSON object. No prose. No markdown. No code fences.
-No commentary before or after. The object MUST contain all four of these
+No commentary before or after. The object MUST contain all five of these
 fields, in any order:
 
   dispatch_summary  string,  1-280  characters  — spoken-out preview, 2-3 short lines
   briefing_text     string,  100-1800 characters — full mission text, paragraph form
   clue              string OR null, up to 200 characters — one short directional or atmospheric hint
   badge_framing     string OR null, up to 80 characters  — short evocative name for any badge earned
+  teaser            string,  up to 140 characters  — see TEASER FIELD below
+
+TEASER FIELD — important.
+A single in-voice sentence shown in a LIST of mission options before the
+operative picks one. It MUST name the target place (so the operative knows
+which option they're picking) and add ONE in-voice hook in your style's
+voice. It should make this option feel different from "the church at the
+corner". Examples of the right shape, by style:
+
+  Agency:  "Davenport Cemetery — quiet ground, quiet exit."
+  Pulp:    "St. Mary's Chapel: rumour says the bell still rings on Tuesdays."
+  Guild:  "The post office at Harrington. The Guild marks it again."
+
+Do NOT use generic copy like "A historic site nearby". Do NOT repeat the
+dispatch_summary or briefing_text. The teaser stands alone in a list — it
+should hook the operative in one breath.
 
 If a value is not applicable, use JSON null — do NOT use empty strings, "N/A",
-or omit the field. All four keys MUST appear.
+or omit the field. All five keys MUST appear.
 
 Stay under the character caps. If your draft is too long, shorten it before
 emitting the JSON.

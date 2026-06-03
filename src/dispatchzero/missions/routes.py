@@ -24,7 +24,19 @@ from dispatchzero.schemas.completions import (
     MissionRequestIn,
     RateIn,
 )
-from dispatchzero.schemas.missions import MissionGenerateIn, MissionOut, PlaceMini
+from dispatchzero.schemas.missions import (
+    CandidateOut,
+    CandidatesOut,
+    MissionGenerateIn,
+    MissionOut,
+    PlaceMini,
+)
+from dispatchzero.services.candidates import (
+    distance_and_bearing_m,
+    empty_message,
+    gather_candidate_places,
+    generate_candidate_missions,
+)
 from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.discovery import discover_nearby
 from dispatchzero.services.rank import completions_to_rank, stats_at_completion
@@ -82,6 +94,7 @@ async def _mission_to_out(
         briefing_text=mission.briefing_text,
         clue=mission.clue,
         badge_framing=mission.badge_framing,
+        teaser=mission.teaser,
         audio_url=mission.audio_url,
         ai_model=mission.ai_model,
         status=mission.status,
@@ -232,6 +245,130 @@ async def request_mission(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
         ) from e
+    place = await _fetch_place(db, mission.place_id)
+    return await _mission_to_out(db, mission, place)
+
+
+# ----- candidate-list flow (Stage 3) -----
+#
+# `POST /missions/candidates`: discover N candidates across multiple tiers,
+# pre-generate briefings + teasers for all of them in parallel, return the
+# list. User picks one in the UI → `POST /missions/candidates/{mission_id}/accept`
+# turns that pick into the active mission (essentially a lookup — the mission
+# is already in the DB).
+#
+# Why pre-generate all N: the wait happens AT the request anyway (parallel
+# generations = wall-clock of the slowest, ~30s on OLMo). The unpicked
+# briefings stay in the library and serve as free pre-warms for the next
+# user at those places — wasted compute becomes stored value.
+
+_CANDIDATE_COUNT = 3
+
+
+@router.post("/candidates", response_model=CandidatesOut)
+async def request_candidates(
+    payload: MissionRequestIn,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
+) -> CandidatesOut:
+    """Return up to N candidate missions for the user to pick from.
+
+    Each candidate has a pre-generated briefing (already persisted as a
+    Mission row) AND a one-sentence in-voice teaser shown in the list UI.
+    Accepting one (POST /missions/candidates/{mission_id}/accept) just
+    surfaces the full mission — no further generation wait.
+
+    Rate-limited per user/day like /missions/request, but note that ONE
+    candidate request burns N briefing generations against the AI backend.
+    """
+    settings = get_settings()
+    try:
+        await check_and_increment(
+            redis=redis, scope="mission_request",
+            identifier=str(user.id),
+            max_count=settings.rate_limit_mission_request_per_day,
+            window_seconds=86400,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many requests, agent — stand by",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
+
+    places = await gather_candidate_places(
+        db=db, redis=redis, user=user,
+        lat=payload.lat, lng=payload.lng,
+        request_radius_m=payload.radius_m,
+        target_count=_CANDIDATE_COUNT,
+    )
+    if not places:
+        return CandidatesOut(
+            candidates=[],
+            empty_message=empty_message(payload.lat, payload.lng),
+        )
+
+    style = payload.adventure_style or user.adventure_style
+    place_ids = [p["id"] for p in places]
+    results = await generate_candidate_missions(
+        user=user, place_ids=place_ids, adventure_style=style,
+    )
+
+    candidates: list[CandidateOut] = []
+    for place_dict, result in zip(places, results):
+        if isinstance(result, Exception):
+            log.warning(
+                "candidate generation failed for place %s: %s",
+                place_dict["id"], result,
+            )
+            continue
+        mission = result
+        # Fetch the place's coordinates for distance + bearing.
+        place_lat, place_lng = await _place_lat_lng(db, mission.place_id)
+        dist_m, compass = distance_and_bearing_m(
+            from_lat=payload.lat, from_lng=payload.lng,
+            to_lat=place_lat, to_lng=place_lng,
+        )
+        candidates.append(CandidateOut(
+            mission_id=mission.id,
+            place_id=mission.place_id,
+            place_name=place_dict["name"] or "(unnamed)",
+            place_category=place_dict["category"],
+            teaser=mission.teaser,
+            distance_m=dist_m,
+            bearing_compass=compass,
+        ))
+
+    # If every generation failed, surface that as 503 — the user shouldn't see
+    # an empty list when the cause was AI-side, not coverage-side.
+    if not candidates and places:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "the dispatch line is unreliable, agent — try again",
+        )
+
+    return CandidatesOut(candidates=candidates)
+
+
+@router.post("/candidates/{mission_id}/accept", response_model=MissionOut)
+async def accept_candidate(
+    mission_id: uuid.UUID,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> MissionOut:
+    """Pick a candidate from the list. Returns the full MissionOut.
+
+    No DB state change — the mission already exists. We just confirm it
+    exists, that it's still active, and that the requester is authed.
+    Future versions could track 'this user chose this candidate' as an
+    analytics signal, but that's not needed for the core flow today.
+    """
+    mission = (
+        await db.execute(select(Mission).where(Mission.id == mission_id))
+    ).scalar_one_or_none()
+    if mission is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "candidate not found")
     place = await _fetch_place(db, mission.place_id)
     return await _mission_to_out(db, mission, place)
 
