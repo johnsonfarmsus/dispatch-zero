@@ -103,6 +103,19 @@ _SYSTEM_BY_STYLE: dict[str, str] = {
 }
 
 
+_REPEAT_VISIT_FRAMING = (
+    "\n\nFOLLOW-UP DISPATCH. This operative has previously completed a "
+    "mission at this target — prior visual contact has already been made. "
+    "Frame the briefing as a return visit. Pick a legitimate angle "
+    "organically (examples: 'secondary sweep', 'updated visual confirmation', "
+    "'ongoing observation', 'the file is reopened', 'the rite asks for "
+    "another witness', 'something has changed since the last record'). Do "
+    "NOT state the visit count numerically in the briefing — that's narrative "
+    "context for you, not text for the operative. Do not pretend it's their "
+    "first time there."
+)
+
+
 def build_mission_prompt(
     *,
     style: AdventureStyle,
@@ -110,8 +123,15 @@ def build_mission_prompt(
     place_name: str,
     place_category: str,
     place_description: str | None,
+    repeat_visit: bool = False,
 ) -> list[dict[str, str]]:
-    """Return OpenAI-compatible messages list for the chat-completions endpoint."""
+    """Return OpenAI-compatible messages list for the chat-completions endpoint.
+
+    `repeat_visit=True` adds follow-up framing — the briefing acknowledges
+    the operative has been here before. Pass this when the user has any
+    prior completion of the same place (services.missions checks
+    user_place_history before calling).
+    """
     if style not in _SYSTEM_BY_STYLE:
         raise ValueError(f"unknown adventure style: {style!r}")
 
@@ -123,6 +143,8 @@ def build_mission_prompt(
         if place_description
         else ""
     )
+
+    repeat_line = _REPEAT_VISIT_FRAMING if repeat_visit else ""
 
     user = (
         f"Issue a mission to operative {callsign}.\n\n"
@@ -138,7 +160,8 @@ def build_mission_prompt(
         f"DO NOT invent coordinates, addresses, street names, grid references, "
         f"or compass bearings — the operative already has the location on their "
         f"map. Speak in terms of the target itself ('the bell tower', 'the south "
-        f"wall'), not navigation.\n\n"
+        f"wall'), not navigation."
+        f"{repeat_line}\n\n"
         f"Respond with the JSON object as specified. Output the JSON only — "
         f"nothing before it, nothing after it, no markdown fences."
     )

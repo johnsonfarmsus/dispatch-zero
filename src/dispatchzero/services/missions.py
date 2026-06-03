@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.config import get_settings
 from dispatchzero.integrations.ollama import OllamaClient, OllamaError
-from dispatchzero.models import Mission, MissionStatus, Place, User
+from dispatchzero.models import Mission, MissionStatus, Place, User, UserPlaceHistory
 from dispatchzero.schemas.missions import MissionContent
 from dispatchzero.services.mission_prompts import build_mission_prompt
 
@@ -59,7 +59,20 @@ async def get_or_generate_mission(
     place_id: uuid.UUID,
     adventure_style: AdventureStyle | None,
 ) -> Mission:
-    """Library hit if available, otherwise generate fresh via Ollama and persist."""
+    """Return a mission for this (user, place, style).
+
+    First-visit (no prior completion of this place by this user):
+        Library hit if available; otherwise generate fresh, save to library,
+        return. The library cache is shared across users, so a place loved
+        by one user serves a free pre-warm to the next.
+
+    Repeat-visit (user has prior completion):
+        Bypass library, always generate fresh with follow-up framing
+        ('secondary sweep', 'the file is reopened', etc.). The resulting
+        mission is marked `repeat_visit=True` and EXCLUDED from future
+        library lookups so a first-time visitor never sees a "back again"
+        briefing that doesn't fit their context.
+    """
     style = adventure_style or user.adventure_style
 
     place = (
@@ -68,9 +81,12 @@ async def get_or_generate_mission(
     if place is None:
         raise MissionGenerationError(f"place {place_id} not found")
 
-    library_hit = await _library_lookup(db, place_id=place_id, style=style)
-    if library_hit is not None:
-        return library_hit
+    is_repeat = await _user_has_visited(db, user_id=user.id, place_id=place_id)
+
+    if not is_repeat:
+        library_hit = await _library_lookup(db, place_id=place_id, style=style)
+        if library_hit is not None:
+            return library_hit
 
     settings = get_settings()
     client = OllamaClient(
@@ -86,6 +102,7 @@ async def get_or_generate_mission(
             place_name=place.name or "an unnamed place",
             place_category=place.category,
             place_description=place.description,
+            repeat_visit=is_repeat,
         )
         content = await _generate_with_repair(client, messages)
         content = _ensure_signoff(content, style=style)
@@ -100,11 +117,29 @@ async def get_or_generate_mission(
         clue=content.clue,
         badge_framing=content.badge_framing,
         ai_model=settings.ollama_model,
+        repeat_visit=is_repeat,
     )
     db.add(mission)
     await db.commit()
     await db.refresh(mission)
     return mission
+
+
+async def _user_has_visited(
+    db: AsyncSession, *, user_id: uuid.UUID, place_id: uuid.UUID
+) -> bool:
+    """True if user_place_history has any row for (user, place) — meaning the
+    user has at least one prior completion of this place. Doesn't care how
+    long ago; the goal is briefing tone, not eligibility."""
+    row = (
+        await db.execute(
+            select(UserPlaceHistory.id).where(
+                UserPlaceHistory.user_id == user_id,
+                UserPlaceHistory.place_id == place_id,
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    return row is not None
 
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)
@@ -225,7 +260,13 @@ def _try_parse(raw: str) -> MissionContent | None:
 async def _library_lookup(
     db: AsyncSession, *, place_id: uuid.UUID, style: str
 ) -> Mission | None:
-    """Return the best-loved still-active mission for this place+style, if any."""
+    """Return the best-loved still-active mission for this place+style, if any.
+
+    Excludes `repeat_visit=True` rows — those have follow-up framing
+    ('secondary sweep' etc.) that would be jarring for a first-time visitor.
+    A first-visit library hit is shared across users; a repeat-visit briefing
+    is per-user-context and dies with its single mission row.
+    """
     stmt = (
         select(Mission)
         .where(
@@ -233,6 +274,7 @@ async def _library_lookup(
             Mission.adventure_style == style,
             Mission.status == MissionStatus.ACTIVE.value,
             Mission.mission_thumbs_down < 3,
+            Mission.repeat_visit.is_(False),
         )
         .order_by(Mission.mission_thumbs_up.desc(), Mission.created_at.asc())
         .limit(1)

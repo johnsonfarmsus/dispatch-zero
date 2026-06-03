@@ -7,14 +7,16 @@ import respx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dispatchzero.models import Mission, Place, User
+from dispatchzero.models import Mission, Place, User, UserPlaceHistory
 from dispatchzero.schemas.missions import MissionContent
 from dispatchzero.services.missions import (
     MissionGenerationError,
     _ensure_signoff,
     _strip_markdown_fences,
+    _user_has_visited,
     get_or_generate_mission,
 )
+from dispatchzero.services.mission_prompts import build_mission_prompt
 
 
 def test_strip_markdown_fences_unwraps_json_block():
@@ -80,6 +82,156 @@ def test_ensure_signoff_respects_2200_char_cap():
     out = _ensure_signoff(c, style="guild")
     assert len(out.briefing_text) <= 2200
     assert out.briefing_text.endswith("— Guildmaster Zero")
+
+
+# ---------- repeat-visit prompt + flow ----------
+
+def test_build_mission_prompt_no_repeat_omits_followup_framing():
+    """First-visit briefings shouldn't carry follow-up framing in the prompt
+    — would confuse the model into pretending the operative has been there."""
+    msgs = build_mission_prompt(
+        style="agency", callsign="Solo", place_name="X", place_category="historic",
+        place_description=None, repeat_visit=False,
+    )
+    user_msg = msgs[-1]["content"]
+    assert "FOLLOW-UP DISPATCH" not in user_msg
+    assert "previously completed" not in user_msg
+
+
+def test_build_mission_prompt_repeat_includes_followup_framing():
+    """Repeat-visit briefings get explicit follow-up framing in the prompt."""
+    msgs = build_mission_prompt(
+        style="agency", callsign="Solo", place_name="X", place_category="historic",
+        place_description=None, repeat_visit=True,
+    )
+    user_msg = msgs[-1]["content"]
+    assert "FOLLOW-UP DISPATCH" in user_msg
+    assert "previously completed" in user_msg
+    # And the prompt explicitly forbids stating visit count numerically
+    assert "numerically" in user_msg
+
+
+@pytest.mark.asyncio
+async def test_user_has_visited_returns_true_after_history_row(db_session):
+    user, place = await _make_user_and_place(db_session)
+    assert not await _user_has_visited(db_session, user_id=user.id, place_id=place.id)
+
+    db_session.add(UserPlaceHistory(user_id=user.id, place_id=place.id))
+    await db_session.commit()
+
+    assert await _user_has_visited(db_session, user_id=user.id, place_id=place.id)
+
+
+@pytest.mark.asyncio
+async def test_repeat_visit_bypasses_library_and_marks_mission(db_session, monkeypatch):
+    """User has prior history → library cache MUST be bypassed (force fresh
+    generation) AND the resulting mission row gets repeat_visit=True so it
+    doesn't leak into other users' first-visit library lookups."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    # Seed a library mission for this place+style — would normally be returned
+    cached_payload = {
+        "dispatch_summary": "CACHED summary.",
+        "briefing_text": "CACHED briefing.",
+        "clue": None, "badge_framing": None,
+    }
+    cached = Mission(
+        place_id=place.id, adventure_style="agency",
+        dispatch_summary=cached_payload["dispatch_summary"],
+        briefing_text=cached_payload["briefing_text"],
+        repeat_visit=False,
+    )
+    db_session.add(cached)
+
+    # Mark the user as having previously visited this place
+    db_session.add(UserPlaceHistory(user_id=user.id, place_id=place.id))
+    await db_session.commit()
+
+    fresh_payload = {
+        "dispatch_summary": "FRESH follow-up summary.",
+        "briefing_text": "FRESH follow-up briefing.",
+        "clue": None, "badge_framing": None,
+    }
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ollama_response(fresh_payload))
+        )
+        mission = await get_or_generate_mission(
+            db=db_session, user=user, place_id=place.id, adventure_style="agency",
+        )
+
+    # We got the FRESH one, not the cached one
+    assert "FRESH" in mission.dispatch_summary
+    assert mission.repeat_visit is True
+    # The cached one is still in the DB but wasn't returned
+    rows = (
+        await db_session.execute(
+            select(Mission).where(Mission.place_id == place.id)
+        )
+    ).scalars().all()
+    assert len(rows) == 2  # cached + fresh
+
+
+@pytest.mark.asyncio
+async def test_first_visit_uses_library_hit_when_available(db_session, monkeypatch):
+    """No prior history → library hit returned without an LLM call. Mirror
+    of the pre-existing test, but explicit about the repeat-visit invariant
+    not breaking the cache path for new users."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    cached = Mission(
+        place_id=place.id, adventure_style="agency",
+        dispatch_summary="Hello world.",
+        briefing_text="Body.",
+        repeat_visit=False,
+    )
+    db_session.add(cached)
+    await db_session.commit()
+
+    # No respx mock — if the code calls out to Ollama, the test fails
+    mission = await get_or_generate_mission(
+        db=db_session, user=user, place_id=place.id, adventure_style="agency",
+    )
+    assert mission.id == cached.id
+    assert mission.repeat_visit is False
+
+
+@pytest.mark.asyncio
+async def test_library_lookup_skips_repeat_visit_missions(db_session, monkeypatch):
+    """A first-time visitor must NOT receive a follow-up briefing from the
+    library cache. If only repeat_visit rows exist for a place, the system
+    generates fresh for the new user (with repeat_visit=False)."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    # Only a repeat-visit mission exists for this place — leftover from
+    # some other user's follow-up dispatch
+    leftover = Mission(
+        place_id=place.id, adventure_style="agency",
+        dispatch_summary="The file is reopened.",
+        briefing_text="Back again.",
+        repeat_visit=True,
+    )
+    db_session.add(leftover)
+    await db_session.commit()
+
+    fresh_payload = {
+        "dispatch_summary": "First-visit summary.",
+        "briefing_text": "First-visit briefing.",
+        "clue": None, "badge_framing": None,
+    }
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_ollama_response(fresh_payload))
+        )
+        mission = await get_or_generate_mission(
+            db=db_session, user=user, place_id=place.id, adventure_style="agency",
+        )
+    assert mission.id != leftover.id
+    assert mission.repeat_visit is False
+    assert "First-visit" in mission.dispatch_summary
 
 
 async def _make_user_and_place(db: AsyncSession) -> tuple[User, Place]:

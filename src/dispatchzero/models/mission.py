@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,15 @@ class Mission(Base):
     audio_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+
+    # True when this mission was generated for a user who has previously
+    # completed the same place. The briefing has follow-up framing ("secondary
+    # sweep", "ongoing observation") that wouldn't make sense for a first-time
+    # visitor — so the library cache lookup (services.missions._library_lookup)
+    # filters these out when serving missions to new users.
+    repeat_visit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
