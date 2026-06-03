@@ -39,13 +39,11 @@ export async function home() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "code" }, user.callsign),
     ),
-    // .scrollable so the History / Settings / Report-POI buttons stay
-    // reachable on smaller viewports (the in-browser case with URL bar +
-    // bottom toolbar eats ~150px more than the PWA does — without scroll
-    // those buttons fall off the bottom edge of the content area before
-    // the user can see them). Request Dispatch and the // security
-    // protocols // link stay pinned in the actions footer regardless.
-    el("div", { class: "content stack scrollable" },
+    // No scroll on this screen — the gameplay vibe wants single-page.
+    // Tightened content stack gap (--s-3, default is --s-5) keeps
+    // everything within the in-browser viewport (which loses ~150px to
+    // Safari chrome vs the PWA case).
+    el("div", { class: "content stack", style: { gap: "var(--s-3)" } },
       el("div", { class: "row" },
         el("img", {
           src: `/static/avatars/zero-${user.adventure_style}.png`,
@@ -64,13 +62,9 @@ export async function home() {
         ),
       ),
       el("div", { class: "divider" }),
-      el("div", { class: "stack", style: { gap: "var(--s-2)", alignItems: "center" } },
-        el("span", { class: "subtitle" }, "Agent"),
-        el("span", {
-          class: "code",
-          style: { fontSize: "var(--t-2xl)", letterSpacing: "0.04em" },
-        }, user.callsign),
-      ),
+      // The big AGENT / callsign hero was redundant with the callsign in
+      // the header band, and removing it is exactly the ~100px we needed
+      // to free for the in-browser viewport to fit everything.
       el("div", { class: "stack", style: { gap: "var(--s-2)" } },
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "Rank"),
