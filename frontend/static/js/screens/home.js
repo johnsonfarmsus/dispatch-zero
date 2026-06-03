@@ -73,8 +73,20 @@ export async function home() {
         ),
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "Completions"),
-          el("span", { class: "code", style: { fontSize: "var(--t-2xl)" } },
-            String(user.completions_count ?? 0)),
+          // Completions count + a small "(N pending)" suffix when the user has
+          // community submissions awaiting review. Pending submissions roll
+          // into the main count when approved; the suffix is the visual
+          // signal that a count change is in flight.
+          el("div", { class: "row", style: { gap: "var(--s-2)", alignItems: "baseline" } },
+            el("span", { class: "code", style: { fontSize: "var(--t-2xl)" } },
+              String(user.completions_count ?? 0)),
+            (user.pending_submissions ?? 0) > 0
+              ? el("span", {
+                  class: "muted mono",
+                  style: { fontSize: "var(--t-xs)" },
+                }, `(${user.pending_submissions} pending)`)
+              : null,
+          ),
         ),
         el("div", { class: "row", style: { justifyContent: "space-between" } },
           el("span", { class: "subtitle" }, "This week"),
@@ -82,8 +94,8 @@ export async function home() {
         ),
       ),
       el("div", { class: "divider" }),
-      // The two secondary buttons live in the previously-dead space between
-      // stats and Request Dispatch. Equal-width 50/50 so neither dominates.
+      // History + Settings: secondary actions in the dead space between
+      // stats and Request Dispatch. Equal-width 50/50.
       el("div", {
         class: "row",
         style: {
@@ -95,6 +107,14 @@ export async function home() {
         historyBtn,
         settingsBtn,
       ),
+      // Report button: full-width, slotted between the secondary actions and
+      // the primary Request Dispatch. Distinct visual weight ("--secondary"
+      // styling without the accent border) so it doesn't compete with
+      // Request Dispatch but is still clearly a real action.
+      el("a", {
+        href: "/report", "data-route": true,
+        class: "secondary-action",
+      }, "Report a Point of Interest"),
     ),
     el("div", { class: "actions" },
       requestBtn,

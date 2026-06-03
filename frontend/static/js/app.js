@@ -16,6 +16,8 @@ import { debrief as missionDebrief } from "./screens/mission/debrief.js";
 import { rate as missionRate } from "./screens/mission/rate.js";
 import { history } from "./screens/history.js";
 import { historyDetail } from "./screens/history-detail.js";
+import { report } from "./screens/report.js";
+import { submissionDetail } from "./screens/submission-detail.js";
 import { securityProtocols } from "./screens/security-protocols.js";
 
 const root = document.getElementById("app");
@@ -55,6 +57,9 @@ async function bootstrap() {
   defineRoute("/completions/:id/rate", (p) => missionRate(p));
   defineRoute("/history", () => history());
   defineRoute("/history/:id", (p) => historyDetail(p));
+  defineRoute("/report", () => report());
+  defineRoute("/submission/:id/debrief", (p) => submissionDetail(p));
+  defineRoute("/submission/:id", (p) => submissionDetail(p));
   defineRoute("/security", () => securityProtocols());
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
