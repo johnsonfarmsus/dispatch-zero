@@ -18,13 +18,14 @@ When you're within 80 m of the target, the camera unlocks. You take a photo as p
 
 ### Discovery
 
-Five-tier search, evaluated in order until at least one eligible candidate surfaces:
+Six-tier search, evaluated in order until at least one eligible candidate surfaces:
 
 1. **2 km narrow OSM** — Overpass query for art, murals, sculptures, memorials
 2. **5 km narrow OSM** — same, wider radius
 3. **5 km broad OSM** — adds historic buildings, places of worship, viewpoints
 4. **5 km Wikipedia** — geosearch enriched with Wikidata
-5. **5 km local DB** — places curated/imported into the instance's own database (USGS GNIS imports, manual additions). The rural-coverage fallback.
+5. **10 km broad OSM** — one wider OSM sweep before falling to curated data; catches semi-rural areas where the 5km tiers were empty
+6. **10 km local DB** — places curated/imported into the instance's own database (USGS GNIS imports, manual additions). Rural-coverage fallback.
 
 A 30-day re-entry filter prevents re-dispatching the same place to the same user too soon. When that does cycle back, the briefing is force-generated fresh with follow-up framing ("secondary sweep", "the file is reopened", style-appropriate per organization) so re-visits don't feel like reruns. Per-user permanent exclusions let users report a place as gone / inaccessible / never findable; reported places never come up for that user again, and two distinct users reporting the same place flags it for the maintainer to review.
 

@@ -169,11 +169,18 @@ async def generate(
 # (`discover_nearby` filters out completed places, so 0 returned = either case)
 _REQUEST_TIERS: list[tuple[int, str, bool]] = [
     # (radius_m, source, broad)
-    # Tier 0 is dynamic — uses payload.radius_m with overpass+strict
+    # Tier 0 is dynamic — uses payload.radius_m with overpass+strict (typically 2km)
     (5000, "overpass", False),   # Tier 1: 5km strict OSM
     (5000, "overpass", True),    # Tier 2: 5km broad OSM (parks, peaks, churches, etc)
     (5000, "wikipedia", False),  # Tier 3: 5km Wikipedia geosearch (global coverage)
-    (5000, "local", False),      # Tier 4: 5km local DB (GNIS imports + any other curated data)
+    (10000, "overpass", True),   # Tier 4: 10km broad OSM — one wider sweep of OSM
+                                 # before falling to curated data; catches semi-rural
+                                 # towns where the 5km tiers came up empty but OSM
+                                 # has a nearby churchyard, trailhead, etc.
+    (10000, "local", False),     # Tier 5: 10km local DB (GNIS + curated). Rural
+                                 # coverage fallback. Bumped from 5km to 10km when
+                                 # the tier ladder was reworked — by the time we're
+                                 # this deep, "walking distance" already lost.
 ]
 
 

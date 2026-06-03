@@ -42,12 +42,15 @@ AdventureStyle = Literal["pulp", "agency", "guild"]
 # Per-tier (radius_m, source, broad) — matches the existing _REQUEST_TIERS
 # from missions/routes.py but the BEHAVIOR is different: we don't stop at
 # first hit, we accumulate across tiers until we have N candidates.
+# Six-tier ladder: close art first, broaden the OSM net, fall through to
+# Wikipedia, then a wider OSM sweep, then the curated local DB.
 _CANDIDATE_TIERS: list[tuple[int, str, bool]] = [
-    (2000, "overpass", False),   # Tier 0: narrow OSM at caller's preferred radius
+    (2000, "overpass", False),   # Tier 0: 2km narrow OSM (caller's default radius)
     (5000, "overpass", False),   # Tier 1: 5km strict OSM
     (5000, "overpass", True),    # Tier 2: 5km broad OSM
     (5000, "wikipedia", False),  # Tier 3: Wikipedia geosearch
-    (5000, "local", False),      # Tier 4: local GNIS / curated
+    (10000, "overpass", True),   # Tier 4: 10km broad OSM (wider sweep before curated)
+    (10000, "local", False),     # Tier 5: 10km local GNIS / curated
 ]
 
 
