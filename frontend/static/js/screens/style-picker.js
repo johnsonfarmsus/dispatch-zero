@@ -1,6 +1,6 @@
 import { el } from "../dom.js";
 import { api } from "../api.js";
-import { getUser, setUser } from "../state.js";
+import { getUser, setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
 import { STYLE_META } from "../style-meta.js";
 
@@ -15,6 +15,13 @@ const TAGLINES = {
 export function stylePicker() {
   const current = getUser()?.adventure_style || "agency";
   const errEl = el("div", { class: "fault", hidden: true });
+  const logoutLink = el("a", { href: "#", class: "muted" }, "Stand Down");
+  logoutLink.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await api.post("/auth/logout", {});
+    clearUser();
+    await navigate("/", { replace: true });
+  });
 
   function styleOption(s) {
     const isCurrent = s === current;
@@ -60,10 +67,10 @@ export function stylePicker() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— organization"),
+      el("span", { class: "muted" }, "— settings"),
     ),
     el("div", { class: "content stack" },
-      el("div", { class: "title" }, "Choose Your Organization"),
+      el("div", { class: "subtitle" }, "Organization"),
       styleOption("pulp"),
       styleOption("agency"),
       styleOption("guild"),
@@ -74,6 +81,10 @@ export function stylePicker() {
         href: "/", "data-route": true, class: "muted",
         style: { textAlign: "center", padding: "var(--s-2)" },
       }, "Back to Home"),
+      // Account action — lives here in Settings rather than on the main
+      // dashboard, where it was easy to misfire near the Request Dispatch
+      // button.
+      logoutLink,
     ),
   );
 }

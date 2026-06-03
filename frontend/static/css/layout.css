@@ -109,27 +109,29 @@
   font-size: var(--t-sm);
 }
 
-/* Secondary action button — styled to match the default <button> outlined
-   look, but applied to anchor tags so router navigation works via
-   data-route. Used for the home-screen History + Settings shortcuts. */
+/* Secondary action button — anchor styled as a button so router navigation
+   works via data-route. Used for the home-screen History + Settings
+   shortcuts. Accent border + accent text so it visibly reads as
+   "tap me" — the previous surface-rule grey was too subtle and easy to
+   miss against the dark background. */
 .secondary-action {
   display: block;
   text-align: center;
   padding: var(--s-3) var(--s-4);
-  color: var(--text);
+  color: var(--accent);
   background: transparent;
-  border: 1px solid var(--surface-rule);
+  border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   text-decoration: none;
   font-family: var(--font-mono);
   font-size: var(--t-sm);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  transition: border-color 80ms, color 80ms;
+  transition: background 80ms, color 80ms;
 }
 .secondary-action:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--surface-bg);
   text-decoration: none;
 }
 

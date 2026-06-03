@@ -15,7 +15,6 @@ export async function home() {
   const user = r.data;
   setUser(user);
 
-  const logoutLink = el("a", { href: "#", class: "muted" }, "Stand Down");
   const requestBtn = el("button", { class: "primary" }, "Request Dispatch");
   const requestStatus = el("div", {
     class: "muted mono",
@@ -100,7 +99,6 @@ export async function home() {
     el("div", { class: "actions" },
       requestBtn,
       requestStatus,
-      logoutLink,
       el("a", {
         href: "/security", "data-route": true,
         class: "muted",
@@ -113,13 +111,6 @@ export async function home() {
       }, "// security protocols //"),
     ),
   );
-
-  logoutLink.addEventListener("click", async (e) => {
-    e.preventDefault();
-    await api.post("/auth/logout", {});
-    clearUser();
-    await navigate("/", { replace: true });
-  });
 
   requestBtn.addEventListener("click", async () => {
     requestBtn.disabled = true;
