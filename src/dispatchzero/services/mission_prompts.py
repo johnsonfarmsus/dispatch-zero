@@ -25,13 +25,31 @@ fields, in any order:
 TEASER FIELD — important.
 A single in-voice sentence shown in a LIST of mission options before the
 operative picks one. It MUST name the target place (so the operative knows
-which option they're picking) and add ONE in-voice hook in your style's
-voice. It should make this option feel different from "the church at the
-corner". Examples of the right shape, by style:
+which option they're picking) and add ONE in-voice hook.
 
-  Agency:  "Davenport Cemetery — quiet ground, quiet exit."
-  Pulp:    "St. Mary's Chapel: rumour says the bell still rings on Tuesdays."
-  Guild:  "The post office at Harrington. The Guild marks it again."
+Vary your hook. AVOID leaning on the same atmospheric word across briefings
+— specifically AVOID "silent", "silence", "quiet", "shadows", "whispers"
+unless they are genuinely the most accurate word. Reach for concrete
+specifics (timing, geometry, an object, a procedure, a constraint) before
+reaching for mood adjectives. Each teaser should feel structurally
+different from the next.
+
+Examples of varied shapes, by style:
+
+  Agency:
+    - "Mountain View Cemetery — east gate, three minutes max."
+    - "First Presbyterian. The bell tower is the angle, not the doors."
+    - "Davenport Post Office: photograph, then walk south."
+
+  Pulp:
+    - "St. Mary's Chapel — rumour says the bell rings on Tuesdays."
+    - "Old Mill Bridge. Watch your footing on the planks; it's older than the road."
+    - "Riverbend Cemetery — the marker we want is the one without a name."
+
+  Guild:
+    - "The post office at Harrington. The Guild marks it again."
+    - "Sky Valley Falls — the rite asks for water under sunlight."
+    - "Trinity Bible Fellowship. Observe the threshold; do not enter."
 
 Do NOT use generic copy like "A historic site nearby". Do NOT repeat the
 dispatch_summary or briefing_text. The teaser stands alone in a list — it

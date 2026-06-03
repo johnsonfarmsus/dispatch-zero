@@ -22,16 +22,23 @@ export async function home() {
     style: { textAlign: "center", fontSize: "var(--t-xs)" },
   }, "");
 
-  const menu = navMenu();
+  // Two prominent secondary buttons in the dead space between stats and the
+  // primary Request Dispatch action. The kebab menu these replace was
+  // discoverable but under-used — surfacing the two highest-traffic screens
+  // (dossier + style switch) as actual buttons is a UX upgrade.
+  const historyBtn = el("a", {
+    href: "/history", "data-route": true,
+    class: "secondary-action",
+  }, "History");
+  const settingsBtn = el("a", {
+    href: "/style", "data-route": true,
+    class: "secondary-action",
+  }, "Settings");
 
   const screen = el("div", { class: "screen" },
-    el("div", { class: "header", style: { position: "relative" } },
+    el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("div", { class: "row", style: { gap: "var(--s-3)" } },
-        el("span", { class: "code" }, user.callsign),
-        menu.button,
-      ),
-      menu.panel,
+      el("span", { class: "code" }, user.callsign),
     ),
     el("div", { class: "content stack" },
       el("div", { class: "row" },
@@ -75,11 +82,35 @@ export async function home() {
           el("span", { class: "code" }, String(user.missions_this_week ?? 0)),
         ),
       ),
+      el("div", { class: "divider" }),
+      // The two secondary buttons live in the previously-dead space between
+      // stats and Request Dispatch. Equal-width 50/50 so neither dominates.
+      el("div", {
+        class: "row",
+        style: {
+          gap: "var(--s-3)",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+        },
+      },
+        historyBtn,
+        settingsBtn,
+      ),
     ),
     el("div", { class: "actions" },
       requestBtn,
       requestStatus,
       logoutLink,
+      el("a", {
+        href: "/security", "data-route": true,
+        class: "muted",
+        style: {
+          textAlign: "center",
+          fontSize: "var(--t-xs)",
+          textTransform: "uppercase",
+          letterSpacing: "0.12em",
+        },
+      }, "// security protocols //"),
     ),
   );
 
@@ -141,96 +172,5 @@ export async function home() {
     }
   });
 
-  return { element: screen, cleanup: menu.cleanup };
-}
-
-// Header overflow menu: kebab toggle + absolutely-positioned panel.
-// Uses existing tokens (mono uppercase, surface-rule borders, accent on hover)
-// so it visually matches the header it lives in.
-function navMenu() {
-  const button = el("button", {
-    "aria-label": "Menu",
-    "aria-haspopup": "true",
-    "aria-expanded": "false",
-    style: {
-      padding: "var(--s-1) var(--s-3)",
-      fontSize: "var(--t-lg)",
-      lineHeight: "1",
-      letterSpacing: "0.1em",
-    },
-  }, "⋮");  // vertical ellipsis (kebab)
-
-  function item(label, href) {
-    return el("a", {
-      href, "data-route": true,
-      style: {
-        display: "block",
-        padding: "var(--s-3) var(--s-4)",
-        color: "var(--text)",
-        fontFamily: "var(--font-mono)",
-        fontSize: "var(--t-xs)",
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        textDecoration: "none",
-        borderBottom: "1px solid var(--surface-rule)",
-      },
-    }, label);
-  }
-
-  const panel = el("div", {
-    role: "menu",
-    hidden: true,
-    style: {
-      position: "absolute",
-      top: "100%",
-      right: "0",
-      marginTop: "var(--s-2)",
-      minWidth: "180px",
-      background: "var(--surface-raised)",
-      border: "1px solid var(--surface-rule)",
-      borderRadius: "var(--r-sm)",
-      zIndex: "10",
-    },
-  },
-    item("Dossier", "/history"),
-    item("Switch organization", "/style"),
-    item("Security protocols", "/security"),
-  );
-  // Last item: drop the divider border for a tidier edge.
-  panel.lastChild.style.borderBottom = "none";
-
-  function close() {
-    panel.hidden = true;
-    button.setAttribute("aria-expanded", "false");
-  }
-  function toggle() {
-    const open = panel.hidden;
-    panel.hidden = !open;
-    button.setAttribute("aria-expanded", String(open));
-  }
-
-  button.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggle();
-  });
-  // Click outside closes the menu. The router intercepts data-route link
-  // clicks before they reach document, so internal nav still works.
-  const onDocClick = (e) => {
-    if (panel.hidden) return;
-    if (panel.contains(e.target) || button.contains(e.target)) return;
-    close();
-  };
-  // Esc to dismiss — keyboard parity with native menus.
-  const onKeydown = (e) => {
-    if (e.key === "Escape" && !panel.hidden) close();
-  };
-  document.addEventListener("click", onDocClick);
-  document.addEventListener("keydown", onKeydown);
-
-  const cleanup = () => {
-    document.removeEventListener("click", onDocClick);
-    document.removeEventListener("keydown", onKeydown);
-  };
-
-  return { button, panel, cleanup };
+  return screen;
 }
