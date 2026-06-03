@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Guard against the 2026-06-02 incident: deploy/test.sh ran rsync --delete
+# WITHOUT --exclude 'uploads', which mirrored "local has no uploads/" to
+# the VPS and deleted every captured user photo.
+#
+# Rule: any script under deploy/ that uses `rsync --delete` MUST also
+# carry `--exclude 'uploads'` (or `--exclude=uploads`). The runtime user-
+# data directory at /opt/dispatchzero/uploads is the only place those
+# photos live; rsync --delete with no exclude is a guaranteed data-loss
+# bug, not a "be careful" hazard.
+#
+# To install on a fresh clone:
+#   git config core.hooksPath .githooks
+#
+# (Documented in CONTRIBUTING.md.)
+set -e
+
+changed=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^deploy/.*\.sh$' || true)
+if [[ -z "$changed" ]]; then
+    exit 0
+fi
+
+failed=0
+for f in $changed; do
+    # Read the staged version, not the working-tree version, so the check
+    # reflects exactly what's about to land.
+    staged=$(git show ":$f" 2>/dev/null || cat "$f")
+    if echo "$staged" | grep -qE '(^|[[:space:]])--delete($|[[:space:]=])'; then
+        if ! echo "$staged" | grep -qE "exclude[ =]'?uploads'?"; then
+            echo "ERROR: $f uses rsync --delete but is missing --exclude 'uploads'."
+            echo "       This will wipe /opt/dispatchzero/uploads on the VPS."
+            echo "       Add --exclude 'uploads' to the rsync command."
+            echo "       (See deploy/deploy.sh for the canonical pattern.)"
+            failed=1
+        fi
+    fi
+done
+
+if [[ "$failed" -ne 0 ]]; then
+    echo
+    echo "Commit blocked by .githooks/pre-commit."
+    echo "If you genuinely need to commit a deploy script without the uploads"
+    echo "exclude, run with --no-verify (but please don't)."
+    exit 1
+fi

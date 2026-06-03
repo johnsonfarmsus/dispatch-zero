@@ -29,7 +29,7 @@ A 90-day re-entry filter prevents re-dispatching the same place to the same user
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2
 - **Data:** PostgreSQL + PostGIS, Redis (rate limiting + session signal)
 - **Geo data sources:** OpenStreetMap (via Overpass), Wikipedia geosearch + Wikidata, optional local-DB tier (e.g. USGS GNIS import — see `src/dispatchzero/tools/import_gnis.py`)
-- **AI:** Ollama Cloud (`gpt-oss:120b` by default) — any OpenAI-compatible endpoint works; leaving the API key blank disables AI and uses deterministic placeholder text
+- **AI:** Ollama Cloud (`gemma4:31b-cloud` by default) — any OpenAI-compatible endpoint works; canonical instance runs a self-hosted [OLMo 2](https://allenai.org/olmo) 13B over Tailscale. Leaving the API key blank disables AI and uses deterministic placeholder text
 - **Image:** Pillow for thumbnails, EXIF stripping, and mission-card composition
 - **Frontend:** Vanilla HTML/CSS/JS, no SPA framework; installable as a PWA
 - **Reverse proxy:** Caddy (auto-HTTPS via Let's Encrypt)

@@ -19,6 +19,7 @@ echo "[1/2] syncing source (including tests) to ${VPS_HOST}:${REMOTE_DIR}"
 # Stage 1-3 push on 2026-06-02 and deleted 5 of Trevor's trip photos
 # before this exclude was added. Same protection as in deploy.sh — do not
 # remove without a different persistence story for /opt/dispatchzero/uploads.
+# The .githooks/pre-commit hook now also blocks commits that violate this.
 rsync -az --delete \
   --exclude '.venv' \
   --exclude '__pycache__' \

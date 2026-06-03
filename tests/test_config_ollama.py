@@ -13,7 +13,11 @@ def test_ollama_settings_have_sensible_defaults(monkeypatch):
     s = Settings()
     assert s.ollama_api_key == "test-key"
     assert s.ollama_base_url == "https://ollama.com/v1"
-    assert s.ollama_model == "gpt-oss:120b"
+    # Cloud-fallback default switched from gpt-oss:120b to gemma4:31b-cloud
+    # — a smaller open-weight model closer in spirit to the self-hosted
+    # OLMo 2 13B production target, more aligned with the project's open
+    # source values.
+    assert s.ollama_model == "gemma4:31b-cloud"
     # Bumped from 15s to 60s when production switched to self-hosted OLMo 2 —
     # a slow inference box can take 15-40s per briefing and 15s was clipping it.
     assert s.ollama_timeout_seconds == 60

@@ -35,6 +35,16 @@ In rough order of "yes please" → "probably not":
 
 See [README.md → Self-hosting → Local dev](README.md#local-dev).
 
+After cloning, install the repo's git hooks once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook blocks commits to `deploy/*.sh` that would re-introduce
+the data-loss bug from 2026-06-02 (rsync `--delete` without `--exclude 'uploads'`
+silently wiped captured user photos on the VPS).
+
 The repository uses Alembic for migrations. If you change a model:
 
 ```bash
