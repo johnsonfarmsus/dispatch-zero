@@ -75,11 +75,17 @@ export function report() {
     hidden: true,
   });
 
-  const submitBtn = el("button", { type: "submit", class: "primary" },
-    "Submit");
+  // Submit button lives in the .actions footer (outside the form element)
+  // for layout reasons. The `form="report-form"` attribute associates them
+  // via HTML5 so submit + validation still fire — clicking the button
+  // dispatches the form's submit event the same way an in-form button would.
+  const submitBtn = el("button", {
+    type: "submit", form: "report-form", class: "primary",
+  }, "Submit");
   const errEl = el("div", { class: "fault", hidden: true });
 
   const form = el("form", {
+    id: "report-form",
     style: { display: "flex", flexDirection: "column", gap: "var(--s-3)" },
   },
     el("label", { class: "stack", style: { gap: "var(--s-1)" } },
