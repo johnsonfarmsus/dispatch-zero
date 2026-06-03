@@ -63,7 +63,10 @@ export async function home() {
             styleMeta(user.adventure_style).org),
         ),
       ),
-      el("div", { class: "divider" }),
+      // Tighter dividers on this screen — the default .divider has
+      // var(--s-4) margin top+bottom which adds ~32px each; we want the
+      // sections to read as a unit, so cut to var(--s-2).
+      el("div", { class: "divider", style: { margin: "var(--s-2) 0" } }),
       // Callsign hero — restored above the stats but without the AGENT
       // subtitle (label was redundant with the // dispatch zero // —
       // CALLSIGN band in the header). The big mono treatment still gives
@@ -102,7 +105,7 @@ export async function home() {
           el("span", { class: "code" }, String(user.missions_this_week ?? 0)),
         ),
       ),
-      el("div", { class: "divider" }),
+      el("div", { class: "divider", style: { margin: "var(--s-2) 0" } }),
       // History + Settings: secondary actions in the dead space between
       // stats and Request Dispatch. Equal-width 50/50.
       el("div", {
@@ -131,10 +134,12 @@ export async function home() {
       requestBtn,
       requestStatus,
     ),
-    el("div", { class: "actions" },
-      // Just the security-protocols policy link down here. It's not a
-      // game action, it's a policy reference — separate row + border
-      // appropriately distinguishes it.
+    // Bottom row of the screen grid. Used to be a .actions wrapper but
+    // that class carries a border-top that drew an unwanted line under
+    // Request Dispatch. A plain div fills the grid slot without the line;
+    // grid pinning still anchors the security link to the bottom of the
+    // viewport.
+    el("div", { style: { display: "flex", flexDirection: "column" } },
       el("a", {
         href: "/security", "data-route": true,
         class: "muted",
