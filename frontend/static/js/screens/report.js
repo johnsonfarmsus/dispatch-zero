@@ -15,22 +15,12 @@ import { getUser } from "../state.js";
 import { navigate } from "../router.js";
 import { styleMeta } from "../style-meta.js";
 
+// Tight one-sentence intros. The screen needs to fit on one viewport in
+// browser mode (no scroll), and the long versions ate too many lines.
 const _INTROS = {
-  agency: (
-    "Operative, the file is always incomplete. " +
-    "Submit coordinates of any subject of operational interest in your " +
-    "territory for entry into the registry. The Archive will verify."
-  ),
-  pulp: (
-    "Field intelligence is always welcome. If you've come across something " +
-    "the Archive doesn't know about — a mural, a forgotten chapel, a marker " +
-    "by the road — submit it for cataloguing. Future expeditions will benefit."
-  ),
-  guild: (
-    "The Guild's chronicle is forever unfinished. If you have witnessed a " +
-    "site of significance that goes unrecorded, mark it for inclusion in the " +
-    "codex. The mark is yours; the record is the Guild's."
-  ),
+  agency: "Submit coordinates for entry into the registry. The Archive verifies before dispatch.",
+  pulp: "Found something the Archive doesn't know? Submit it. Future expeditions will benefit.",
+  guild: "Mark a site of significance for inclusion in the codex. The Guild will witness.",
 };
 
 const _CATEGORIES = [
@@ -62,7 +52,7 @@ export function report() {
     ),
   );
   const descInput = el("textarea", {
-    maxlength: "140", rows: "3",
+    maxlength: "140", rows: "2",
     placeholder:
       "Optional. One sentence on why this place is worth a dispatch.",
     style: { resize: "vertical" },
@@ -86,17 +76,17 @@ export function report() {
 
   const form = el("form", {
     id: "report-form",
-    style: { display: "flex", flexDirection: "column", gap: "var(--s-3)" },
+    style: { display: "flex", flexDirection: "column", gap: "var(--s-2)" },
   },
-    el("label", { class: "stack", style: { gap: "var(--s-1)" } },
+    el("label", { class: "stack", style: { gap: "2px" } },
       el("span", { class: "subtitle" }, "Place name"),
       nameInput,
     ),
-    el("label", { class: "stack", style: { gap: "var(--s-1)" } },
+    el("label", { class: "stack", style: { gap: "2px" } },
       el("span", { class: "subtitle" }, "Category"),
       categorySelect,
     ),
-    el("label", { class: "stack", style: { gap: "var(--s-1)" } },
+    el("label", { class: "stack", style: { gap: "2px" } },
       el("span", { class: "subtitle" }, "Why this place? (optional)"),
       descInput,
     ),
@@ -165,25 +155,31 @@ export function report() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "— report"),
     ),
-    el("div", { class: "content stack" },
+    // Tight content stack (--s-2) so this fits in browser viewport without
+    // scroll. The single-page gameplay vibe means everything — handler card,
+    // intro, full form — needs to land above the fold.
+    el("div", { class: "content stack", style: { gap: "var(--s-2)" } },
       el("div", { class: "row" },
         el("img", {
           src: `/static/avatars/zero-${style}.png`,
           alt: `Zero — ${style} style`,
           style: {
-            width: "48px", height: "48px", borderRadius: "50%",
+            width: "44px", height: "44px", borderRadius: "50%",
             border: "1px solid var(--surface-rule)", objectFit: "cover",
           },
         }),
-        el("div", { class: "stack", style: { gap: "2px" } },
+        el("div", { class: "stack", style: { gap: "1px" } },
           el("span", { class: "subtitle" }, handler.handler),
           el("span", { class: "muted", style: { fontSize: "var(--t-sm)", fontStyle: "italic" } },
             handler.org),
         ),
       ),
+      // margin:0 strips the default ~16px top/bottom <p> margin browsers
+      // apply — without this, the intro adds ~32px of dead space.
       el("p", {
         style: {
-          fontSize: "var(--t-sm)", lineHeight: "1.5", color: "var(--text)",
+          fontSize: "var(--t-sm)", lineHeight: "1.4", color: "var(--text)",
+          margin: "0",
         },
       }, intro),
       form,
