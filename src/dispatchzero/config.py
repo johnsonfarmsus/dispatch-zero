@@ -22,15 +22,25 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = 60 * 15  # 15 min
 
     # Briefing AI — any OpenAI-compatible chat endpoint.
-    # Defaults point at Ollama Cloud's hosted gemma4:31b-cloud (a smaller,
-    # open-weight model than the previous gpt-oss:120b default — closer in
-    # spirit to the self-hosted OLMo 2 production target). Production
-    # overrides via env to a self-hosted OLMo 2 13B endpoint over Tailscale.
-    # Timeout is set generously (60s) so a slow inference box doesn't fail
-    # mid-briefing — cloud overrides this in dev/.env if it wants tighter.
+    #
+    # Default: a locally-running Ollama instance serving olmo2:13b. Matches
+    # the canonical-instance production setup (which uses Ollama over Tailscale
+    # to a separate inference box) and aligns with the project's AGPL stance —
+    # OLMo 2 is the most-open model available (Apache-2.0 weights + open
+    # training data + open training code).
+    #
+    # For local dev with docker compose: .env.example overrides this default
+    # to http://host.docker.internal:11434/v1 so the app container can reach
+    # Ollama running on the host.
+    #
+    # Cloud fallback (paid): set OLLAMA_BASE_URL=https://ollama.com/v1 +
+    # OLLAMA_MODEL=gemma4:31b-cloud + a real OLLAMA_API_KEY.
+    #
+    # Timeout is generous (60s) — a slow inference box can take 25-40s per
+    # briefing and 15s was clipping it.
     ollama_api_key: str = ""
-    ollama_base_url: str = "https://ollama.com/v1"
-    ollama_model: str = "gemma4:31b-cloud"
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_model: str = "olmo2:13b"
     ollama_timeout_seconds: int = 60
 
     # Photo capture and verification

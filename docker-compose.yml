@@ -40,6 +40,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Lets the app container reach a local Ollama running on the host via
+    # http://host.docker.internal:11434/v1 — the default OLLAMA_BASE_URL
+    # in .env.example. Docker Desktop on Mac/Windows resolves this name
+    # automatically; on Linux this extra_hosts line is what makes it work.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # Bound to 127.0.0.1 only — Caddy on the same host (or the dev laptop) is the
       # sole consumer. The wildcard --forwarded-allow-ips below is safe BECAUSE of

@@ -12,12 +12,13 @@ def test_ollama_settings_have_sensible_defaults(monkeypatch):
     monkeypatch.delenv("OLLAMA_TIMEOUT_SECONDS", raising=False)
     s = Settings()
     assert s.ollama_api_key == "test-key"
-    assert s.ollama_base_url == "https://ollama.com/v1"
-    # Cloud-fallback default switched from gpt-oss:120b to gemma4:31b-cloud
-    # — a smaller open-weight model closer in spirit to the self-hosted
-    # OLMo 2 13B production target, more aligned with the project's open
-    # source values.
-    assert s.ollama_model == "gemma4:31b-cloud"
+    # Default points at a locally-running Ollama instance (the canonical
+    # production setup) rather than a paid cloud endpoint. .env.example
+    # overrides the URL to host.docker.internal for the docker-compose dev
+    # workflow; this assertion checks the raw code default for the case
+    # where someone runs the app directly (no docker, no .env).
+    assert s.ollama_base_url == "http://localhost:11434/v1"
+    assert s.ollama_model == "olmo2:13b"
     # Bumped from 15s to 60s when production switched to self-hosted OLMo 2 —
     # a slow inference box can take 15-40s per briefing and 15s was clipping it.
     assert s.ollama_timeout_seconds == 60
