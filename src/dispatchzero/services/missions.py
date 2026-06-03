@@ -131,10 +131,17 @@ async def get_or_generate_mission(
 async def _user_has_visited(
     db: AsyncSession, *, user_id: uuid.UUID, place_id: uuid.UUID
 ) -> bool:
-    """True if user_place_history has any row for (user, place) — meaning the
-    user has at least one prior completion of this place. Doesn't care how
-    long ago; the goal is briefing tone, not eligibility."""
-    row = (
+    """True if the user has 'been to' this place in the briefing-tone sense.
+
+    Two paths count as a prior visit:
+    1. UserPlaceHistory row from a completed mission, OR
+    2. The user is the original submitter of this place — they took the
+       submission photo, so they've literally been there with a camera.
+
+    Either path triggers repeat-visit briefing framing (services.mission_prompts
+    appends a follow-up directive to the prompt). Doesn't care how long ago.
+    """
+    history_row = (
         await db.execute(
             select(UserPlaceHistory.id).where(
                 UserPlaceHistory.user_id == user_id,
@@ -142,7 +149,18 @@ async def _user_has_visited(
             ).limit(1)
         )
     ).scalar_one_or_none()
-    return row is not None
+    if history_row is not None:
+        return True
+
+    submission_row = (
+        await db.execute(
+            select(Place.id).where(
+                Place.id == place_id,
+                Place.submitted_by_user_id == user_id,
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    return submission_row is not None
 
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)

@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -54,9 +55,16 @@ async def db_session():
     engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
 
     # Fresh schema per test — drops everything, recreates from current models.
+    # Bare-SQL artifacts that aren't SQLAlchemy Base.metadata (sequences in
+    # particular) live in the alembic migrations; we recreate them here so the
+    # test schema matches production. Currently:
+    # - community_place_id_seq backs Place.osm_id for osm_type='community'
+    #   (services.submissions.create_submission needs it).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("DROP SEQUENCE IF EXISTS community_place_id_seq"))
+        await conn.execute(text("CREATE SEQUENCE community_place_id_seq"))
 
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

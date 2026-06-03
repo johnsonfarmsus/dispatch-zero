@@ -3,7 +3,17 @@ from datetime import datetime
 from enum import StrEnum
 
 from geoalchemy2 import Geography
-from sqlalchemy import BigInteger, DateTime, Float, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +37,12 @@ class PlaceStatus(StrEnum):
     FLAGGED = "flagged"
     SUSPENDED = "suspended"
     RETIRED = "retired"
+    # PENDING: place was submitted by a community user and is awaiting maintainer
+    # review. Not dispatchable until the linked Submission's status flips to
+    # APPROVED (which also flips the Place to ACTIVE). On REJECTED submissions
+    # the Place can be left at PENDING indefinitely or moved to RETIRED — either
+    # way, no future dispatch will land here.
+    PENDING = "pending"
 
 
 class Place(Base):
@@ -35,7 +51,10 @@ class Place(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    osm_type: Mapped[str] = mapped_column(String(8), nullable=False)  # node|way|relation
+    # Originally VARCHAR(8) sized for OSM's "node"/"way"/"relation". Widened to
+    # 16 so we can use longer source tags like "community" (POI submissions)
+    # and any future imports (overture, hifld, etc.) without another migration.
+    osm_type: Mapped[str] = mapped_column(String(16), nullable=False)
     osm_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     category: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -51,6 +70,24 @@ class Place(Base):
     location_thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+
+    # Community-submission attribution. Non-null for places that came in via
+    # POST /submissions/capture (osm_type='community'). Used by
+    # services.missions._user_has_visited so a user dispatched to a place they
+    # submitted gets the repeat-visit briefing framing — the submission photo
+    # counted as their first visit. Null for everything else (Overpass /
+    # Wikipedia / GNIS).
+    submitted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The optional 140-char description the user wrote at submission time.
+    # Fed into the briefing prompt as flavor for places where we have no
+    # external description (Wikipedia / Wikidata blurb).
+    submission_description: Mapped[str | None] = mapped_column(
+        String(140), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

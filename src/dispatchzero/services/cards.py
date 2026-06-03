@@ -344,3 +344,236 @@ def compose_mission_card(
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path, format="JPEG", quality=85, optimize=True)
+
+
+# ============================================================================
+# Contribution card (community POI submissions)
+# ============================================================================
+#
+# Same 4:5 frame as the mission card, same handler avatar, same accent. The
+# flavor block carries in-voice copy keyed to the submission's review status,
+# and a corner stamp marks PENDING / VERIFIED / RETURNED so the user can tell
+# at a glance where the submission is in the workflow.
+#
+# Imported lazily by services.submissions to avoid a circular import (cards
+# doesn't otherwise know about Submission).
+
+_CONTRIBUTION_BLURB = {
+    "agency": {
+        "pending": (
+            "The Archive has received your dispatch coordinates, operative. "
+            "Verification is pending. Stand by — the file will be marked "
+            "when review is complete."
+        ),
+        "approved": (
+            "Your dispatch is verified, operative. The coordinates have "
+            "been entered into the active registry. Future assets may be "
+            "dispatched to this location based on your intelligence."
+        ),
+        "returned": (
+            "The Archive could not verify your dispatch coordinates. The "
+            "file has been closed. Submit fresh intelligence when "
+            "conditions improve, operative."
+        ),
+    },
+    "pulp": {
+        "pending": (
+            "The Archive welcomes your field intelligence. Your submission "
+            "is being reviewed. The cataloguer will mark the file once the "
+            "site has been confirmed."
+        ),
+        "approved": (
+            "Your field intelligence is confirmed. The Archive has logged "
+            "this site for future expeditions. Excellent work."
+        ),
+        "returned": (
+            "The Archive cataloguer was unable to confirm your field "
+            "intelligence. The submission is returned. The expedition "
+            "continues; submit again when you have a clearer record."
+        ),
+    },
+    "guild": {
+        "pending": (
+            "The Guild has received your mark. The codex is being prepared "
+            "for the entry. The ceremony of confirmation has not yet been "
+            "performed."
+        ),
+        "approved": (
+            "The mark is set. The Guild's chronicle now bears witness to "
+            "this site. Future wardens may be drawn to it through your "
+            "naming."
+        ),
+        "returned": (
+            "The Guild has set this mark aside. The ceremony was not "
+            "completed. The chronicle remains incomplete; the mark may "
+            "yet be brought again when the time is right."
+        ),
+    },
+}
+
+_STAMP_LABEL = {
+    "pending": "PENDING",
+    "approved": "VERIFIED",
+    "returned": "RETURNED",
+}
+
+
+def compose_contribution_card(
+    *,
+    photo_path: Path,
+    place_name: str,
+    callsign: str,
+    submitted_at: datetime,
+    adventure_style: str,
+    status,                 # SubmissionStatus, accepted as enum or str
+    output_path: Path,
+) -> None:
+    """Compose the trading-card-style contribution JPEG and save it.
+
+    Same visual frame as compose_mission_card but the flavor block carries
+    status-specific in-voice copy and a corner stamp marks the review state.
+    Re-called when status flips so the user's dossier card updates in place.
+    """
+    accent = _ACCENT.get(adventure_style, _ACCENT["agency"])
+    sign_off = _SIGN_OFF.get(adventure_style, _SIGN_OFF["agency"])
+    org_name = ORG_NAMES.get(adventure_style, ORG_NAMES["agency"])
+    handler_name = HANDLER_NAMES.get(adventure_style, HANDLER_NAMES["agency"])
+    callsign_upper = (callsign or "").upper()
+    status_str = getattr(status, "value", status)
+    blurb = _CONTRIBUTION_BLURB.get(adventure_style, _CONTRIBUTION_BLURB["agency"]).get(
+        status_str, _CONTRIBUTION_BLURB["agency"]["pending"]
+    )
+    stamp_text = _STAMP_LABEL.get(status_str, "PENDING")
+
+    canvas = Image.new("RGB", (_WIDTH, _HEIGHT), _BG)
+    draw = ImageDraw.Draw(canvas)
+
+    draw.rectangle(
+        [(15, 15), (_WIDTH - 15, _HEIGHT - 15)],
+        outline=accent, width=2,
+    )
+
+    inner_left = _OUTER_MARGIN
+    inner_right = _WIDTH - _OUTER_MARGIN
+
+    # ----- Header band -----
+    header_top = _OUTER_MARGIN
+    header_font = _font(_FONT_BOLD, 28)
+    draw.text(
+        (inner_left + _INNER_PAD, header_top + 30),
+        "// DISPATCH ZERO //",
+        font=header_font, fill=_TEXT_MUTED,
+    )
+    draw.text(
+        (inner_right - _INNER_PAD - draw.textbbox((0, 0), callsign_upper, font=header_font)[2], header_top + 30),
+        callsign_upper,
+        font=header_font, fill=accent,
+    )
+
+    # ----- Hero panel: org/handler column + photo right -----
+    hero_top = header_top + _HEADER_H
+    hero_bottom = hero_top + _HERO_H
+
+    # Org + handler column
+    col_x = inner_left + _INNER_PAD
+    col_y = hero_top + 20
+    org_font = _font(_FONT_BOLD, 28)
+    draw.text((col_x, col_y), org_name.upper(), font=org_font, fill=_TEXT)
+    col_y += 50
+
+    avatar = _avatar_for_style(adventure_style)
+    if avatar is not None:
+        _draw_avatar(canvas, avatar, col_x, col_y, 150)
+    col_y += 170
+
+    handler_font = _font(_FONT_BOLD, 26)
+    draw.text((col_x, col_y), handler_name, font=handler_font, fill=_TEXT)
+    col_y += 36
+    draw.text(
+        (col_x, col_y), "YOUR HANDLER",
+        font=_font(_FONT_REGULAR, 18), fill=_TEXT_FAINT,
+    )
+    col_y += 50
+
+    # The status stamp lives in the avatar column, below the handler block —
+    # outlined in the accent color so it reads as a workflow chip.
+    stamp_font = _font(_FONT_BOLD, 22)
+    sb = draw.textbbox((0, 0), stamp_text, font=stamp_font)
+    sw = sb[2] - sb[0] + 24
+    sh = sb[3] - sb[1] + 14
+    draw.rectangle(
+        [(col_x, col_y), (col_x + sw, col_y + sh)],
+        outline=accent, width=2,
+    )
+    draw.text(
+        (col_x + 12, col_y + 7),
+        stamp_text,
+        font=stamp_font, fill=accent,
+    )
+    col_y += sh + 16
+
+    # The submitter's callsign + a SUBMITTER label.
+    draw.text(
+        (col_x, col_y), callsign_upper,
+        font=_font(_FONT_BOLD, 26), fill=_TEXT,
+    )
+    col_y += 36
+    draw.text(
+        (col_x, col_y), "SUBMITTER",
+        font=_font(_FONT_REGULAR, 18), fill=_TEXT_FAINT,
+    )
+
+    # Photo on the right
+    if Path(photo_path).exists():
+        photo = Image.open(photo_path).convert("RGB")
+        photo = _square_crop(photo, _PHOTO_SIZE)
+        photo_x = inner_right - _INNER_PAD - _PHOTO_SIZE
+        photo_y = hero_top + (_HERO_H - _PHOTO_SIZE) // 2
+        canvas.paste(photo, (photo_x, photo_y))
+        draw.rectangle(
+            [(photo_x - 1, photo_y - 1),
+             (photo_x + _PHOTO_SIZE, photo_y + _PHOTO_SIZE)],
+            outline=accent, width=2,
+        )
+
+    # ----- Title band -----
+    title_top = hero_bottom
+    title_font = _font(_FONT_BOLD, 38)
+    draw.text(
+        (inner_left + _INNER_PAD, title_top + 20),
+        _truncate(place_name, 36),
+        font=title_font, fill=_TEXT,
+    )
+    draw.text(
+        (inner_left + _INNER_PAD, title_top + 75),
+        submitted_at.strftime("%Y-%m-%d"),
+        font=_font(_FONT_REGULAR, 22),
+        fill=_TEXT_MUTED,
+    )
+
+    # ----- Flavor block -----
+    flavor_top = title_top + _TITLE_H
+    flavor_font = _font(_FONT_REGULAR, 26)
+    sign_font = _font(_FONT_BOLD, 24)
+
+    lines = _wrap_to_lines(blurb, width_chars=44, max_lines=7)
+    line_y = flavor_top + 30
+    for line in lines:
+        draw.text(
+            (inner_left + _INNER_PAD, line_y),
+            line,
+            font=flavor_font, fill=_TEXT,
+        )
+        line_y += 38
+
+    bbox = draw.textbbox((0, 0), sign_off, font=sign_font)
+    sign_w = bbox[2] - bbox[0]
+    sign_y = _HEIGHT - _OUTER_MARGIN - 50
+    draw.text(
+        (inner_right - _INNER_PAD - sign_w, sign_y),
+        sign_off,
+        font=sign_font, fill=accent,
+    )
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(output_path, format="JPEG", quality=85, optimize=True)
