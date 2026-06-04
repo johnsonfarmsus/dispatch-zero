@@ -4,7 +4,7 @@ export function splash() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— receiving"),
+      el("span", { class: "muted" }, "receiving"),
     ),
     el("div",
       { class: "content", style: { justifyContent: "center", alignItems: "center" } },

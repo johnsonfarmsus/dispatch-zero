@@ -16,7 +16,7 @@ export async function dispatch({ id }) {
     return el("div", { class: "screen" },
       el("div", { class: "header" },
         el("span", {}, "// dispatch zero //"),
-        el("span", { class: "muted" }, "— error"),
+        el("span", { class: "muted" }, "error"),
       ),
       el("div", { class: "content stack" },
         el("div", { class: "title" }, "Mission not found."),

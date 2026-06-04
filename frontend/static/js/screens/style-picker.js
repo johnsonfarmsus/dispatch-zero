@@ -67,7 +67,7 @@ export function stylePicker() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— settings"),
+      el("span", { class: "muted" }, "settings"),
     ),
     el("div", { class: "content stack" },
       el("div", { class: "subtitle" }, "Organization"),

@@ -17,19 +17,21 @@ import { styleMeta } from "../style-meta.js";
 
 const _INTROS = {
   agency: (
-    "Operative, the file is always incomplete. " +
-    "Submit coordinates of any subject of operational interest in your " +
-    "territory for entry into the registry. The Archive will verify."
+    "Operative, the file is always incomplete. Submit coordinates of any " +
+    "subject of operational interest in your territory: a marker, an " +
+    "installation, a building of note. Entry into the registry follows " +
+    "verification. The Archive logs every report."
   ),
   pulp: (
     "Field intelligence is always welcome. If you've come across something " +
-    "the Archive doesn't know about — a mural, a forgotten chapel, a marker " +
-    "by the road — submit it for cataloguing. Future expeditions will benefit."
+    "the Archive doesn't know about, a mural, a forgotten chapel, a marker " +
+    "by the road, submit it for cataloguing. Future expeditions will benefit."
   ),
   guild: (
     "The Guild's chronicle is forever unfinished. If you have witnessed a " +
-    "site of significance that goes unrecorded, mark it for inclusion in the " +
-    "codex. The mark is yours; the record is the Guild's."
+    "site of significance that goes unrecorded, a shrine, a stone, an " +
+    "ancient threshold, mark it for inclusion in the codex. The mark is " +
+    "yours, the record is the Guild's."
   ),
 };
 
@@ -163,7 +165,7 @@ export function report() {
   const screen = el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— report"),
+      el("span", { class: "muted" }, "report"),
     ),
     // Tight content stack (--s-2) so this fits in browser viewport without
     // scroll. The single-page gameplay vibe means everything — handler card,

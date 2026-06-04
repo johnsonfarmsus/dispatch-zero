@@ -18,7 +18,7 @@ export async function debrief({ id }) {
   const skipLink = el("a", {
     href: "/", "data-route": true, class: "muted",
     style: { textAlign: "center", padding: "var(--s-2)" },
-  }, "Skip — Return to Base");
+  }, "Return to Base");
 
   if (d?.completion?.id && d?.completion?.share_token) {
     rateBtn.addEventListener("click",
@@ -45,7 +45,7 @@ export async function debrief({ id }) {
         ),
       )
     : el("div", { class: "muted" },
-        "Refreshed view unavailable — return to Home for current stats.");
+        "Refreshed view unavailable. Return to Home for current stats.");
 
   const badge = mission.badge_framing
     ? el("div", { class: "stack", style: { gap: "var(--s-2)" } },

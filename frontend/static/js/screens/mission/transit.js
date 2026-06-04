@@ -27,7 +27,7 @@ export async function transit({ id }) {
   const arrow = makeArrowSvg();
   const compassWrap = el("div", { class: "compass" }, arrow);
 
-  const distEl = el("div", { class: "distance-readout" }, "—");
+  const distEl = el("div", { class: "distance-readout" }, "...");
   const bearingEl = el("div", { class: "bearing-readout" }, "ACQUIRING FIX");
 
   const captureBtn = el("button", { class: "primary", disabled: true },
@@ -117,7 +117,7 @@ export async function transit({ id }) {
       captureBtn.textContent = "Capture";
     } else {
       captureBtn.disabled = true;
-      captureBtn.textContent = `Closer, agent — ${formatDistance(d - RADIUS_M)} to range`;
+      captureBtn.textContent = `Closer, agent. ${formatDistance(d - RADIUS_M)} to range`;
     }
   }
 

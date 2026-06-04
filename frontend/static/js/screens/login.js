@@ -13,7 +13,7 @@ export function login() {
   const form = el("form", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— authenticating"),
+      el("span", { class: "muted" }, "authenticating"),
     ),
     el("div", { class: "content stack" },
       el("div", { class: "title" }, "Resume Field Status"),

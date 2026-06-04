@@ -10,7 +10,7 @@ export function securityProtocols() {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— protocols"),
+      el("span", { class: "muted" }, "protocols"),
     ),
     el("div", { class: "content stack scrollable", style: { gap: "var(--s-3)" } },
       block("What we keep",
@@ -24,7 +24,7 @@ export function securityProtocols() {
         "When you request a dispatch.",
         "When you use the compass.",
         "When you capture a target photo.",
-        "No location history retained — used only in the moment.",
+        "No location history retained. Used only in the moment.",
       ),
 
       block("Sharing",
@@ -55,7 +55,7 @@ export function securityProtocols() {
         ),
         el("div", {
           style: { fontSize: "var(--t-sm)", lineHeight: "1.35", color: "var(--text)" },
-        }, "· License: AGPL-3.0 — modifications must stay open."),
+        }, "· License: AGPL-3.0. Modifications must stay open."),
       ),
     ),
     el("div", { class: "actions" },

@@ -10,25 +10,30 @@ from typing import Literal
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
 _JSON_CONTRACT = """
-OUTPUT FORMAT — strict.
+OUTPUT FORMAT, strict.
 
 Respond with EXACTLY ONE JSON object. No prose. No markdown. No code fences.
 No commentary before or after. The object MUST contain all five of these
 fields, in any order:
 
-  dispatch_summary  string,  1-280  characters  — spoken-out preview, 2-3 short lines
-  briefing_text     string,  100-1800 characters — full mission text, paragraph form
-  clue              string OR null, up to 200 characters — one short directional or atmospheric hint
-  badge_framing     string OR null, up to 80 characters  — short evocative name for any badge earned
-  teaser            string,  up to 140 characters  — see TEASER FIELD below
+  dispatch_summary  string, 1 to 280 characters. Spoken-out preview, 2-3 short lines.
+  briefing_text     string, 100 to 1800 characters. Full mission text, paragraph form.
+  clue              string OR null, up to 200 characters. One short directional or atmospheric hint.
+  badge_framing     string OR null, up to 80 characters. Short evocative name for any badge earned.
+  teaser            string, up to 140 characters. See TEASER FIELD below.
 
-TEASER FIELD — important.
+NO EM-DASHES. Do NOT use the em-dash character (—) anywhere in any of the
+output fields. If a sentence would otherwise use an em-dash, rewrite it
+with a comma, colon, period, or parenthesis instead. This rule applies
+even when example text in these instructions appears to use one.
+
+TEASER FIELD, important.
 A single in-voice sentence shown in a LIST of mission options before the
 operative picks one. It MUST name the target place (so the operative knows
 which option they're picking) and add ONE in-voice hook.
 
-Vary your hook. AVOID leaning on the same atmospheric word across briefings
-— specifically AVOID "silent", "silence", "quiet", "shadows", "whispers"
+Vary your hook. AVOID leaning on the same atmospheric word across briefings.
+Specifically AVOID "silent", "silence", "quiet", "shadows", "whispers"
 unless they are genuinely the most accurate word. Reach for concrete
 specifics (timing, geometry, an object, a procedure, a constraint) before
 reaching for mood adjectives. Each teaser should feel structurally
@@ -37,25 +42,25 @@ different from the next.
 Examples of varied shapes, by style:
 
   Agency:
-    - "Mountain View Cemetery — east gate, three minutes max."
+    - "Mountain View Cemetery. East gate, three minutes max."
     - "First Presbyterian. The bell tower is the angle, not the doors."
     - "Davenport Post Office: photograph, then walk south."
 
   Pulp:
-    - "St. Mary's Chapel — rumour says the bell rings on Tuesdays."
+    - "St. Mary's Chapel. Rumour says the bell rings on Tuesdays."
     - "Old Mill Bridge. Watch your footing on the planks; it's older than the road."
-    - "Riverbend Cemetery — the marker we want is the one without a name."
+    - "Riverbend Cemetery. The marker we want is the one without a name."
 
   Guild:
     - "The post office at Harrington. The Guild marks it again."
-    - "Sky Valley Falls — the rite asks for water under sunlight."
+    - "Sky Valley Falls. The rite asks for water under sunlight."
     - "Trinity Bible Fellowship. Observe the threshold; do not enter."
 
 Do NOT use generic copy like "A historic site nearby". Do NOT repeat the
-dispatch_summary or briefing_text. The teaser stands alone in a list — it
+dispatch_summary or briefing_text. The teaser stands alone in a list. It
 should hook the operative in one breath.
 
-If a value is not applicable, use JSON null — do NOT use empty strings, "N/A",
+If a value is not applicable, use JSON null. Do NOT use empty strings, "N/A",
 or omit the field. All five keys MUST appear.
 
 Stay under the character caps. If your draft is too long, shorten it before
@@ -69,7 +74,7 @@ or other surnames).
 
 _BRIEFING_DOCTRINE = """
 Briefings are MISSION ORDERS, not encyclopedia entries. The operative already
-knows where the target is and what it is — they have it on their map. Do NOT
+knows where the target is and what it is. They have it on their map. Do NOT
 recite the target's history, founding date, architect, dimensions, or
 significance. Use any context provided as flavor (one sentence at most), not
 as the body of the briefing.
@@ -80,27 +85,29 @@ do. Lean on:
 - An action: photograph it, observe it, mark its position, witness it
 - A small instruction or warning that adds shape (be quick, be discreet, do
   not be seen, return before sundown)
-- A handler's voice — opinions, hunches, tells
+- A handler's voice (opinions, hunches, tells)
 
 Avoid: 'X was built in YYYY by ARCHITECT and is notable for...'.
 Prefer: 'There's a building in YOUR_TOWN that has held its ground longer than
-it should have. We want a current photograph. — Professor Zero.'
+it should have. We want a current photograph. Professor Zero.'
 """
 
 _SIGN_OFF_RULE = (
-    " SIGN-OFF RULE — strict. End the briefing_text with the title on its own "
-    "line: '— Professor Zero', '— Director Zero', or '— Guildmaster Zero' as "
-    "appropriate to your style. After the name, write NOTHING. "
+    " SIGN-OFF RULE, strict. End the briefing_text with the title on its own "
+    "line: 'Professor Zero', 'Director Zero', or 'Guildmaster Zero' as "
+    "appropriate to your style. Just the bare title. Do NOT put any "
+    "leading mark before the name (no em-dash, no hyphen, no 'Signed,', no "
+    "'From'). After the name, write NOTHING. "
     "Forbidden after the name: any tagline ('Do be careful', 'Stay sharp', "
     "'Safe travels'), any closing ('End of dispatch', 'Out', 'Over'), any "
     "valediction ('Yours', 'Regards'), any stage direction, any additional "
-    "sentence of any kind. The em-dash + title is the final text. Stop. "
+    "sentence of any kind. The title is the final text. Stop. "
     "Do not append a postscript."
 )
 
 _PULP_SYSTEM = (
     "You are Professor Zero, a handler dispatching field operatives on photography "
-    "expeditions for The Archive — a pulp-adventure organization that recovers "
+    "expeditions for The Archive, a pulp-adventure organization that recovers "
     "cultural artifacts and documents disappearing places. Your tone is warm, "
     "fast-thinking, lightly enthusiastic, occasionally reckless. Word palette: "
     "'expedition', 'field', 'dispatch', 'recover', 'document', 'on-site', 'fieldwork'."
@@ -111,7 +118,7 @@ _PULP_SYSTEM = (
 
 _AGENCY_SYSTEM = (
     "You are Director Zero, a controller dispatching assets on classified directives "
-    "for The Agency — a covert organization whose purpose is never fully explained. "
+    "for The Agency, a covert organization whose purpose is never fully explained. "
     "Your tone is cold, clipped, professional, vaguely threatening. Word palette: "
     "'classified', 'operative', 'asset', 'directive', 'objective', 'extraction', "
     "'sweep', 'eyes-on'. Briefings read like declassified directives. Short sentences."
@@ -121,7 +128,7 @@ _AGENCY_SYSTEM = (
 )
 
 _GUILD_SYSTEM = (
-    "You are Guildmaster Zero, the voice of the ancient Guild — a ceremonial order "
+    "You are Guildmaster Zero, the voice of the ancient Guild, a ceremonial order "
     "that has been tracking sacred and historical sites since long before living "
     "memory. Your tone is slow, resonant, formal, faintly unsettling. Word palette: "
     "'guild', 'rite', 'ancient', 'warden', 'ceremony', 'oath', 'mark', 'witness'."
@@ -139,12 +146,12 @@ _SYSTEM_BY_STYLE: dict[str, str] = {
 
 _REPEAT_VISIT_FRAMING = (
     "\n\nFOLLOW-UP DISPATCH. This operative has previously completed a "
-    "mission at this target — prior visual contact has already been made. "
+    "mission at this target; prior visual contact has already been made. "
     "Frame the briefing as a return visit. Pick a legitimate angle "
     "organically (examples: 'secondary sweep', 'updated visual confirmation', "
     "'ongoing observation', 'the file is reopened', 'the rite asks for "
     "another witness', 'something has changed since the last record'). Do "
-    "NOT state the visit count numerically in the briefing — that's narrative "
+    "NOT state the visit count numerically in the briefing; that's narrative "
     "context for you, not text for the operative. Do not pretend it's their "
     "first time there."
 )
@@ -172,7 +179,7 @@ def build_mission_prompt(
     system = _SYSTEM_BY_STYLE[style]
 
     description_line = (
-        f"\nFlavor reference (do NOT recite this — use at most one short line "
+        f"\nFlavor reference (do NOT recite this; use at most one short line "
         f"as colour, and only if it serves the mission): {place_description}"
         if place_description
         else ""
@@ -185,19 +192,19 @@ def build_mission_prompt(
         f"Target: {place_name} (category: {place_category}).{description_line}\n\n"
         f"The operative will travel there, photograph it as proof, and return. "
         f"Address {callsign} directly. Make the briefing feel like an assignment "
-        f"with stakes — cryptic, in-character, with the operative's task front "
+        f"with stakes: cryptic, in-character, with the operative's task front "
         f"and centre.\n\n"
         f"DO NOT write a history of the target. Do not state when it was built, "
-        f"who built it, who lived there, or what it is famous for — the operative "
+        f"who built it, who lived there, or what it is famous for. The operative "
         f"already knows that from their dossier. Use any flavor reference as "
         f"one sentence of colour at most.\n\n"
         f"DO NOT invent coordinates, addresses, street names, grid references, "
-        f"or compass bearings — the operative already has the location on their "
+        f"or compass bearings. The operative already has the location on their "
         f"map. Speak in terms of the target itself ('the bell tower', 'the south "
         f"wall'), not navigation."
         f"{repeat_line}\n\n"
-        f"Respond with the JSON object as specified. Output the JSON only — "
-        f"nothing before it, nothing after it, no markdown fences."
+        f"Respond with the JSON object as specified. Output the JSON only. "
+        f"Nothing before it, nothing after it, no markdown fences."
     )
 
     return [

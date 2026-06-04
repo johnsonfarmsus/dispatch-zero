@@ -53,24 +53,24 @@ def _content(briefing: str) -> MissionContent:
 def test_ensure_signoff_appends_when_missing_agency():
     c = _content("Travel to the target. Be quick.")
     out = _ensure_signoff(c, style="agency")
-    assert out.briefing_text.endswith("— Director Zero")
+    assert out.briefing_text.endswith("Director Zero")
 
 
 def test_ensure_signoff_appends_when_missing_pulp():
     c = _content("To the church, my friend, swiftly.")
     out = _ensure_signoff(c, style="pulp")
-    assert out.briefing_text.endswith("— Professor Zero")
+    assert out.briefing_text.endswith("Professor Zero")
 
 
 def test_ensure_signoff_appends_when_missing_guild():
     c = _content("Witness the trailhead. Leave no trace.")
     out = _ensure_signoff(c, style="guild")
-    assert out.briefing_text.endswith("— Guildmaster Zero")
+    assert out.briefing_text.endswith("Guildmaster Zero")
 
 
 def test_ensure_signoff_noop_when_already_present():
     """If the model signed off correctly, leave the briefing untouched."""
-    c = _content("Travel to the target. Be quick.\n\n— Director Zero")
+    c = _content("Travel to the target. Be quick.\n\nDirector Zero")
     out = _ensure_signoff(c, style="agency")
     assert out.briefing_text == c.briefing_text
 
@@ -81,7 +81,7 @@ def test_ensure_signoff_respects_2200_char_cap():
     c = _content(long_body)
     out = _ensure_signoff(c, style="guild")
     assert len(out.briefing_text) <= 2200
-    assert out.briefing_text.endswith("— Guildmaster Zero")
+    assert out.briefing_text.endswith("Guildmaster Zero")
 
 
 # ---------- repeat-visit prompt + flow ----------

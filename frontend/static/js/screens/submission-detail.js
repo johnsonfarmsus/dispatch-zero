@@ -79,7 +79,7 @@ export async function submissionDetail({ id }) {
   const screen = el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, `— ${statusLabel}`),
+      el("span", { class: "muted" }, statusLabel),
     ),
     el("div", { class: "content stack", style: { alignItems: "center" } },
       el("div", { class: "subtitle" }, "FILE NUMBER"),

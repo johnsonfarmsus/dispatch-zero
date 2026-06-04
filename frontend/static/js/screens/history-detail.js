@@ -11,7 +11,7 @@ export async function historyDetail({ id }) {
     return el("div", { class: "screen" },
       el("div", { class: "header" },
         el("span", {}, "// dispatch zero //"),
-        el("span", { class: "muted" }, "— not found"),
+        el("span", { class: "muted" }, "not found"),
       ),
       el("div", { class: "content stack" },
         el("div", { class: "title" }, "Dispatch not found."),
@@ -41,7 +41,7 @@ export async function historyDetail({ id }) {
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, "— dispatch"),
+      el("span", { class: "muted" }, "dispatch"),
     ),
     el("div", {
       class: "content",

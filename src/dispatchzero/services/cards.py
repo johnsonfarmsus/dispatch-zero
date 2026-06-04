@@ -67,9 +67,9 @@ _ACCENT = {
 }
 
 _SIGN_OFF = {
-    "pulp": "— Professor Zero",
-    "agency": "— Director Zero",
-    "guild": "— Guildmaster Zero",
+    "pulp": "Professor Zero",
+    "agency": "Director Zero",
+    "guild": "Guildmaster Zero",
 }
 
 _FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
@@ -362,7 +362,7 @@ _CONTRIBUTION_BLURB = {
     "agency": {
         "pending": (
             "The Archive has received your dispatch coordinates, operative. "
-            "Verification is pending. Stand by — the file will be marked "
+            "Verification is pending. Stand by. The file will be marked "
             "when review is complete."
         ),
         "approved": (

@@ -240,7 +240,7 @@ _SIGNOFF_TITLES: dict[str, str] = {
 
 
 def _ensure_signoff(content: MissionContent, *, style: str) -> MissionContent:
-    """Guarantee the briefing ends with the correct '— <Title> Zero' sign-off.
+    """Guarantee the briefing ends with the correct '<Title> Zero' sign-off.
 
     The prompt asks the model to sign off, but a 13B model misses this rule
     in roughly 1-of-3 generations on our hardware. Rather than burn another
@@ -248,18 +248,23 @@ def _ensure_signoff(content: MissionContent, *, style: str) -> MissionContent:
     code: if the expected sign-off is missing, append it. The 2200-char cap
     is respected by trimming the body first if necessary.
 
+    Sign-off format is just the bare title on its own line, no em-dash or
+    other lead-in mark (Trevor's house style — no em-dashes in user text).
+
     Wrong-title sign-offs (e.g. Guild output signed by Director Zero) are
-    left in place — that's rare and the auto-append would produce a weird
-    double sign-off. Logged as a known minor edge case rather than fixed.
+    left in place. Rare, and the auto-append would produce a weird double
+    sign-off. Logged as a known minor edge case rather than fixed.
     """
     title = _SIGNOFF_TITLES.get(style)
     if title is None:
         return content
-    expected = f"— {title}"
-    if expected in content.briefing_text:
+    # endswith catches the sign-off whether the model put a blank line before
+    # it or not. Strip trailing whitespace first so a stray newline doesn't
+    # defeat the match.
+    if content.briefing_text.rstrip().endswith(title):
         return content
 
-    suffix = f"\n\n{expected}"
+    suffix = f"\n\n{title}"
     # MissionContent caps briefing_text at 2200 chars; reserve room for the suffix.
     max_body = 2200 - len(suffix)
     body = content.briefing_text[:max_body].rstrip()

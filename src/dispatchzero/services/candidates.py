@@ -207,6 +207,6 @@ def empty_message(request_lat: float, request_lng: float) -> str:
     """In-voice "nothing fresh here" message. Currently static; future versions
     could compute the direction to the nearest unfamiliar pool of places."""
     return (
-        "No fresh candidates in range, agent. You've worked this ground — "
-        "expand the radius or move to new territory."
+        "No fresh candidates in range, agent. You've worked this ground. "
+        "Expand the radius or move to new territory."
     )
