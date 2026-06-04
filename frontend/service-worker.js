@@ -4,7 +4,7 @@
 // bug where a deploy added new routes but old `app.js` was served from the
 // SW cache, breaking navigation. JS is fetched fresh every load; the browser
 // HTTP cache still helps repeat-load speed.
-const SHELL_CACHE = "dz-shell-v2";
+const SHELL_CACHE = "dz-shell-v3";
 const SHELL_FILES = [
   "/static/css/tokens.css",
   "/static/css/layout.css",
@@ -27,8 +27,18 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  // Non-GET requests (POST / PUT / DELETE / etc.) are never cacheable and
+  // must pass straight through to the network. Intercepting a multipart
+  // POST through caches.match + fetch produces "TypeError: Load failed"
+  // in Safari — the SW was eating /submissions/capture this way before
+  // submissions was added to apiPrefixes.
+  if (event.request.method !== "GET") {
+    return;
+  }
   const url = new URL(event.request.url);
-  const apiPrefixes = ["/auth", "/places", "/missions", "/healthz"];
+  const apiPrefixes = [
+    "/auth", "/places", "/missions", "/submissions", "/healthz",
+  ];
   if (apiPrefixes.some((p) => url.pathname.startsWith(p))) {
     return;
   }
