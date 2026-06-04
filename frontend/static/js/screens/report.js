@@ -169,7 +169,10 @@ export function report() {
     // scroll. The single-page gameplay vibe means everything — handler card,
     // intro, full form — needs to land above the fold.
     el("div", { class: "content stack", style: { gap: "var(--s-2)" } },
-      el("div", { class: "row" },
+      // marginBottom on the handler row buys back the extra breathing
+      // space ABOVE the card (screen grid gap --s-5 + header padding) so
+      // the visual gaps above and below the handler card match.
+      el("div", { class: "row", style: { marginBottom: "var(--s-3)" } },
         el("img", {
           src: `/static/avatars/zero-${style}.png`,
           alt: `Zero — ${style} style`,
