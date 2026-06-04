@@ -15,12 +15,22 @@ import { getUser } from "../state.js";
 import { navigate } from "../router.js";
 import { styleMeta } from "../style-meta.js";
 
-// Tight one-sentence intros. The screen needs to fit on one viewport in
-// browser mode (no scroll), and the long versions ate too many lines.
 const _INTROS = {
-  agency: "Submit coordinates for entry into the registry. The Archive verifies before dispatch.",
-  pulp: "Found something the Archive doesn't know? Submit it. Future expeditions will benefit.",
-  guild: "Mark a site of significance for inclusion in the codex. The Guild will witness.",
+  agency: (
+    "Operative, the file is always incomplete. " +
+    "Submit coordinates of any subject of operational interest in your " +
+    "territory for entry into the registry. The Archive will verify."
+  ),
+  pulp: (
+    "Field intelligence is always welcome. If you've come across something " +
+    "the Archive doesn't know about — a mural, a forgotten chapel, a marker " +
+    "by the road — submit it for cataloguing. Future expeditions will benefit."
+  ),
+  guild: (
+    "The Guild's chronicle is forever unfinished. If you have witnessed a " +
+    "site of significance that goes unrecorded, mark it for inclusion in the " +
+    "codex. The mark is yours; the record is the Guild's."
+  ),
 };
 
 const _CATEGORIES = [
