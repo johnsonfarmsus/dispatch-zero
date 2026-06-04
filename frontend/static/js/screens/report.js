@@ -1,16 +1,22 @@
 // Community POI submission flow. Single screen with:
 //   - in-character intro copy (per the user's adventure style)
 //   - form: name + category + description
-//   - "Add Photo" button: requests browser GPS, then opens camera. After
-//     both succeed the captured file + coords are held in screen state.
-//   - "Submit" button (primary, footer): only enabled when name + category
-//     + photo + GPS are all present. Posts to /submissions/capture and
-//     navigates to the contribution-card debrief.
+//   - One action slot at the bottom that swaps between two states:
+//        State 1: "Add Photo" — a <label> wrapping a hidden file input
+//        State 2: "Submit"    — a button that POSTs to /submissions/capture
+//     Reusing the same slot keeps the layout tight on small viewports.
 //
 // We DON'T extract GPS from the photo's EXIF — too many users haven't
-// granted Location to the iOS Camera app, and asking them to fix it is
-// worse UX than letting the browser request its own location permission
-// independently via navigator.geolocation.
+// granted Location to the iOS Camera app. We use navigator.geolocation
+// (a separate browser permission) and request it AFTER the photo is
+// captured, so the user sees the camera + location prompts in obvious
+// "I'm submitting this place" context rather than upfront.
+//
+// Why a <label>+input instead of JS fileInput.click(): iOS Safari
+// requires the file dialog to be opened from a synchronous user
+// gesture. Any await before .click() (e.g. waiting on getFreshFix)
+// breaks the gesture chain and the camera silently never opens.
+// Native <label> activation has no such restriction.
 
 import { el } from "../dom.js";
 import { api } from "../api.js";
@@ -57,9 +63,7 @@ export function report() {
   const intro = _INTROS[style] || _INTROS.agency;
   const handler = styleMeta(style);
 
-  // ----- state held across the lifecycle of this screen -----
-  // photoFile and photoFix are both captured by the Add Photo button.
-  // Submit only posts when both are present alongside name + category.
+  // Held in closure across the lifecycle of this screen.
   let photoFile = null;
   let photoFix = null;  // { lat, lng, accuracy_m? }
 
@@ -80,31 +84,48 @@ export function report() {
     style: { resize: "vertical" },
   });
 
-  // Hidden camera input. addPhotoBtn triggers .click() on this AFTER
-  // GPS has been acquired; on file change we store the file + GPS and
-  // update the UI.
+  // Hidden file input. Wrapped by the addPhotoLabel below so iOS opens
+  // the camera via native label activation, not via a JS .click() (which
+  // would lose the user-gesture context).
   const fileInput = el("input", {
     type: "file", accept: "image/*", capture: "environment",
-    hidden: true,
+  });
+  // visually hidden but keyboard/tap reachable via the label
+  Object.assign(fileInput.style, {
+    position: "absolute", width: "1px", height: "1px",
+    padding: "0", margin: "-1px", overflow: "hidden",
+    clip: "rect(0,0,0,0)", border: "0",
   });
 
-  const addPhotoBtn = el("button", {
-    type: "button",
-    style: { width: "100%" },
-  }, "Add Photo");
-  // Small line under the button reporting state: "" / "Acquiring location…" /
-  // "Photo attached ✓" / error.
+  // Add Photo label (state 1) — styled like a primary button.
+  const addPhotoLabel = el("label", {
+    class: "primary",
+    style: {
+      display: "block", textAlign: "center", cursor: "pointer",
+      // anchor-style "button" needs explicit padding/border because
+      // <label> doesn't pick up button defaults
+      padding: "var(--s-3) var(--s-4)",
+      border: "1px solid var(--accent)",
+      borderRadius: "var(--r-sm)",
+      color: "var(--accent)",
+      fontFamily: "var(--font-mono)",
+      fontSize: "var(--t-base)",
+    },
+  }, "Add Photo", fileInput);
+
+  // Submit button (state 2). Hidden until photo + GPS are captured.
+  const submitBtn = el("button", {
+    type: "button", class: "primary",
+    style: { display: "none" },
+    disabled: true,
+  }, "Submit");
+
+  // Small status line below the action slot.
   const photoStatus = el("div", {
     class: "muted mono",
     style: { fontSize: "var(--t-xs)", textAlign: "center", minHeight: "1em" },
   }, "");
 
-  const submitBtn = el("button", {
-    type: "button",
-    form: "report-form",
-    class: "primary",
-    disabled: true,
-  }, "Submit");
   const errEl = el("div", { class: "fault", hidden: true });
 
   const form = el("form", {
@@ -123,10 +144,6 @@ export function report() {
       el("span", { class: "subtitle" }, "Why this place? (optional)"),
       descInput,
     ),
-    el("div", { class: "stack", style: { gap: "2px" } },
-      addPhotoBtn,
-      photoStatus,
-    ),
     errEl,
   );
 
@@ -135,8 +152,6 @@ export function report() {
     errEl.hidden = false;
   };
 
-  // Submit is gated on name + category + photo + GPS. Recompute on every
-  // input change so the button comes alive at exactly the right moment.
   function refreshSubmitGate() {
     const ready =
       nameInput.value.trim() !== "" &&
@@ -148,59 +163,50 @@ export function report() {
   nameInput.addEventListener("input", refreshSubmitGate);
   categorySelect.addEventListener("change", refreshSubmitGate);
 
-  addPhotoBtn.addEventListener("click", async () => {
-    errEl.hidden = true;
-    addPhotoBtn.disabled = true;
+  fileInput.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      photoStatus.style.color = "var(--text-muted)";
+      photoStatus.textContent = "";
+      return;
+    }
+    // Photo is captured. Now request GPS — this is where the permission
+    // prompt will show on first use. The flow puts both prompts (camera,
+    // then location) in obvious "I'm submitting a place" context.
     photoStatus.style.color = "var(--text-muted)";
-    photoStatus.textContent = "Acquiring location…";
+    photoStatus.textContent = "Locking location…";
     try {
-      // Get GPS FIRST, then open the camera. If the browser denies location
-      // we don't waste a camera invocation before failing.
       photoFix = await getFreshFix({
         maxAgeMs: 60000,
         enableHighAccuracy: true,
         timeoutMs: 30000,
       });
-      photoStatus.textContent = "Location locked. Opening camera…";
-      fileInput.value = "";  // ensure change fires even if same file picked twice
-      fileInput.click();
-    } catch (e) {
+      photoFile = file;
+      // Swap the action slot from Add Photo → Submit.
+      addPhotoLabel.style.display = "none";
+      submitBtn.style.display = "block";
+      photoStatus.style.color = "var(--accent)";
+      photoStatus.textContent = "Photo and location ready.";
+      refreshSubmitGate();
+    } catch (err) {
       photoFix = null;
       photoStatus.style.color = "var(--danger)";
-      if (e && typeof e.code === "number" && typeof e.PERMISSION_DENIED === "number") {
-        if (e.code === 1) {
+      if (err && typeof err.code === "number" && typeof err.PERMISSION_DENIED === "number") {
+        if (err.code === 1) {
           photoStatus.textContent = "Location denied. Allow location in browser settings.";
-        } else if (e.code === 2) {
+        } else if (err.code === 2) {
           photoStatus.textContent = "GPS unavailable here. Try again outdoors.";
-        } else if (e.code === 3) {
+        } else if (err.code === 3) {
           photoStatus.textContent = "Location lookup timed out. Try again.";
         } else {
-          photoStatus.textContent = `Location error: ${e.message || "unknown"}`;
+          photoStatus.textContent = `Location error: ${err.message || "unknown"}`;
         }
       } else {
-        photoStatus.textContent = e.message || "Location lookup failed.";
+        photoStatus.textContent = err.message || "Location lookup failed.";
       }
-      addPhotoBtn.disabled = false;
-      refreshSubmitGate();
+      // Reset the file input so the user can tap the label again to retry
+      fileInput.value = "";
     }
-  });
-
-  fileInput.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      // User cancelled the camera. Reset to the "Add Photo" state but keep
-      // any GPS fix we acquired; they can hit the button again.
-      photoStatus.style.color = "var(--text-muted)";
-      photoStatus.textContent = photoFix ? "Location ready. Try the photo again." : "";
-      addPhotoBtn.disabled = false;
-      return;
-    }
-    photoFile = file;
-    photoStatus.style.color = "var(--accent)";
-    photoStatus.textContent = "Photo attached. Ready to submit.";
-    addPhotoBtn.textContent = "Replace Photo";
-    addPhotoBtn.disabled = false;
-    refreshSubmitGate();
   });
 
   submitBtn.addEventListener("click", async () => {
@@ -224,7 +230,6 @@ export function report() {
 
     submitBtn.disabled = true;
     submitBtn.textContent = "Transmitting…";
-    addPhotoBtn.disabled = true;
 
     try {
       const fd = new FormData();
@@ -249,8 +254,6 @@ export function report() {
       showErr(msg);
       submitBtn.disabled = false;
       submitBtn.textContent = "Submit";
-      addPhotoBtn.disabled = false;
-      refreshSubmitGate();
     }
   });
 
@@ -259,13 +262,7 @@ export function report() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "report"),
     ),
-    // Tight content stack (--s-2) so this fits in browser viewport without
-    // scroll. The single-page gameplay vibe means everything (handler card,
-    // intro, full form) needs to land above the fold.
     el("div", { class: "content stack", style: { gap: "var(--s-2)" } },
-      // marginBottom on the handler row buys back the extra breathing
-      // space ABOVE the card (screen grid gap --s-5 + header padding) so
-      // the visual gaps above and below the handler card match.
       el("div", { class: "row", style: { marginBottom: "var(--s-3)" } },
         el("img", {
           src: `/static/avatars/zero-${style}.png`,
@@ -288,10 +285,14 @@ export function report() {
         },
       }, intro),
       form,
-      fileInput,
     ),
     el("div", { class: "actions" },
+      // Shared action slot: Add Photo label OR Submit button (only one
+      // visible at a time). Saves the vertical space that two stacked
+      // buttons would otherwise eat.
+      addPhotoLabel,
       submitBtn,
+      photoStatus,
       el("a", {
         href: "/", "data-route": true, class: "muted",
         style: { textAlign: "center", padding: "var(--s-2)" },

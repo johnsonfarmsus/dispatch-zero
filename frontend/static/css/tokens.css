@@ -125,6 +125,10 @@ button.primary:hover:not(:disabled) {
 
 input, select, textarea {
   font: inherit;
+  /* iOS Safari auto-zooms when computed input font-size is < 16px on
+     focus, which is jarring on a tight single-page layout. Forcing 16px
+     here defeats that without affecting the rest of the type scale. */
+  font-size: 16px;
   background: var(--surface-raised);
   color: var(--text);
   border: 1px solid var(--surface-rule);
