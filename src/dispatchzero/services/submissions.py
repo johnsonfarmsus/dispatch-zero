@@ -69,15 +69,24 @@ async def create_submission(
     name: str,
     category: PlaceCategory,
     description: str | None,
+    lat: float,
+    lng: float,
 ) -> Submission:
     """Process a community POI submission end-to-end.
 
-    Validates the photo (must carry GPS in EXIF; EXIF DateTimeOriginal must
-    be within the freshness window), creates a PENDING Place + Submission,
-    saves the photo + composed card, returns the Submission row.
+    GPS coordinates come from the browser via navigator.geolocation, NOT
+    from the photo's EXIF. This is a deliberate UX choice — most users
+    don't enable Location for the iOS Camera app, but the browser can
+    request its own location permission independently. The frontend
+    calls getFreshFix() before opening the camera and posts both the
+    photo + coords here.
 
-    Raises SubmissionRejectedError with a human-readable fail_reason on
-    validation failure — no DB writes happen in that case.
+    EXIF freshness IS still enforced (anti-camera-roll: the photo's
+    DateTimeOriginal must be within settings.exif_freshness_window_seconds
+    of now) so users can't upload an old photo with fresh GPS.
+
+    Raises SubmissionRejectedError on validation failure with a
+    human-readable message. No DB writes happen in that case.
     """
     name = (name or "").strip()
     if not name:
@@ -88,22 +97,21 @@ async def create_submission(
         description = description.strip() or None
     if description is not None and len(description) > 140:
         raise SubmissionRejectedError("description too long (max 140 chars)")
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+        raise SubmissionRejectedError("invalid coordinates")
 
     settings = get_settings()
 
-    # Extract GPS + timestamp from the photo's EXIF before we strip it.
-    lat, lng, captured_at = _extract_exif(raw_photo)
-    if lat is None or lng is None:
-        raise SubmissionRejectedError(
-            "no GPS data in photo — enable location for the camera and try again"
-        )
+    # GPS comes from the browser (already validated above). We only consult
+    # the photo's EXIF for the timestamp, to enforce freshness.
+    _, _, captured_at = _extract_exif(raw_photo)
 
     now = datetime.now(timezone.utc)
     if captured_at is None:
         raise SubmissionRejectedError("no capture timestamp in photo")
     if (now - captured_at).total_seconds() > settings.exif_freshness_window_seconds:
         raise SubmissionRejectedError(
-            "photo is too old — take a fresh one at the location"
+            "photo is too old; take a fresh one at the location"
         )
 
     # Allocate the Place's osm_id from the dedicated community sequence so

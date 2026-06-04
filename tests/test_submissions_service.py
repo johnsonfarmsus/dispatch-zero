@@ -106,6 +106,7 @@ async def test_create_submission_happy_path_persists_everything(
         name="The Old Truss Bridge",
         category=PlaceCategory.INFRASTRUCTURE,
         description="Steel truss over the creek north of town.",
+        lat=47.4808, lng=-118.2547,
     )
 
     assert submission.status == SubmissionStatus.PENDING.value
@@ -136,6 +137,7 @@ async def test_create_submission_rejects_blank_name(db_session, tmp_path, monkey
         await create_submission(
             db=db_session, user=user, raw_photo=_photo_with_gps(),
             name="   ", category=PlaceCategory.MURAL, description=None,
+            lat=47.4808, lng=-118.2547,
         )
 
 
@@ -150,39 +152,23 @@ async def test_create_submission_rejects_overlong_description(
             db=db_session, user=user, raw_photo=_photo_with_gps(),
             name="Wall A", category=PlaceCategory.MURAL,
             description="x" * 141,
+            lat=47.4808, lng=-118.2547,
         )
 
 
 @pytest.mark.asyncio
-async def test_create_submission_rejects_photo_without_gps(
+async def test_create_submission_rejects_invalid_coordinates(
     db_session, tmp_path, monkeypatch,
 ):
-    """make_test_jpeg writes an empty GPS dict — but we explicitly empty it
-    here to be sure. The fail_reason must mention GPS."""
+    """GPS comes from the browser, not the photo. We still range-check
+    the values the route forwards us."""
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user = await _make_user(db_session)
-
-    # Make a JPEG with NO GPS dict at all.
-    import io as _io
-    import piexif
-    from PIL import Image
-
-    img = Image.new("RGB", (200, 200), (10, 20, 30))
-    exif_dict: dict = {
-        "0th": {}, "Exif": {
-            piexif.ExifIFD.DateTimeOriginal:
-                datetime.utcnow().strftime("%Y:%m:%d %H:%M:%S").encode("ascii"),
-        },
-        "GPS": {}, "1st": {}, "thumbnail": None,
-    }
-    buf = _io.BytesIO()
-    img.save(buf, format="JPEG", exif=piexif.dump(exif_dict))
-    no_gps = buf.getvalue()
-
-    with pytest.raises(SubmissionRejectedError, match="GPS"):
+    with pytest.raises(SubmissionRejectedError, match="coordinates"):
         await create_submission(
-            db=db_session, user=user, raw_photo=no_gps,
+            db=db_session, user=user, raw_photo=_photo_with_gps(),
             name="Sample", category=PlaceCategory.MURAL, description=None,
+            lat=999.0, lng=0.0,  # out of range
         )
 
 
@@ -196,6 +182,7 @@ async def test_create_submission_rejects_stale_photo(db_session, tmp_path, monke
             db=db_session, user=user,
             raw_photo=_photo_with_gps(captured_at=stale_time),
             name="Sample", category=PlaceCategory.MURAL, description=None,
+            lat=47.4808, lng=-118.2547,
         )
 
 
@@ -209,7 +196,7 @@ async def test_approve_submission_flips_status_and_activates_place(
 
     submission = await create_submission(
         db=db_session, user=user, raw_photo=_photo_with_gps(),
-        name="Sample", category=PlaceCategory.MURAL, description=None,
+        name="Sample", category=PlaceCategory.MURAL, description=None, lat=47.4808, lng=-118.2547,
     )
 
     approved = await approve_submission(
@@ -232,7 +219,7 @@ async def test_approve_submission_is_idempotent(db_session, tmp_path, monkeypatc
     reviewer = await _make_user(db_session, "Reviewer")
     submission = await create_submission(
         db=db_session, user=user, raw_photo=_photo_with_gps(),
-        name="Sample", category=PlaceCategory.MURAL, description=None,
+        name="Sample", category=PlaceCategory.MURAL, description=None, lat=47.4808, lng=-118.2547,
     )
     first = await approve_submission(
         db=db_session, reviewer=reviewer, submission_id=submission.id,
@@ -252,7 +239,7 @@ async def test_reject_submission_flips_only_submission(
     reviewer = await _make_user(db_session, "Reviewer")
     submission = await create_submission(
         db=db_session, user=user, raw_photo=_photo_with_gps(),
-        name="Sample", category=PlaceCategory.MURAL, description=None,
+        name="Sample", category=PlaceCategory.MURAL, description=None, lat=47.4808, lng=-118.2547,
     )
 
     rejected = await reject_submission(
@@ -279,7 +266,7 @@ async def test_submission_counts_as_prior_visit_for_repeat_briefing(
     user = await _make_user(db_session)
     submission = await create_submission(
         db=db_session, user=user, raw_photo=_photo_with_gps(),
-        name="My Local Plaza", category=PlaceCategory.PARK, description=None,
+        name="My Local Plaza", category=PlaceCategory.PARK, description=None, lat=47.4808, lng=-118.2547,
     )
 
     visited = await _user_has_visited(
@@ -299,7 +286,7 @@ async def test_other_user_did_not_visit_a_submitted_place(
     bystander = await _make_user(db_session, "Bystander")
     submission = await create_submission(
         db=db_session, user=submitter, raw_photo=_photo_with_gps(),
-        name="My Local Plaza", category=PlaceCategory.PARK, description=None,
+        name="My Local Plaza", category=PlaceCategory.PARK, description=None, lat=47.4808, lng=-118.2547,
     )
 
     visited_by_other = await _user_has_visited(

@@ -78,14 +78,20 @@ _CATEGORY_VALUES = Literal[
 async def capture(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
-    photo: Annotated[UploadFile, File(description="Photo with EXIF GPS + DateTimeOriginal")],
+    photo: Annotated[UploadFile, File(description="Captured photo")],
     name: Annotated[str, Form(min_length=1, max_length=200)],
     category: Annotated[_CATEGORY_VALUES, Form()],
+    lat: Annotated[float, Form(ge=-90.0, le=90.0)],
+    lng: Annotated[float, Form(ge=-180.0, le=180.0)],
     description: Annotated[str | None, Form(max_length=140)] = None,
 ) -> SubmissionOut:
-    """Submit a community POI. The photo must carry GPS in EXIF and have a
-    DateTimeOriginal within the freshness window — same anti-camera-roll
-    enforcement we use for mission captures.
+    """Submit a community POI.
+
+    Coordinates come from the browser (navigator.geolocation), not from
+    the photo's EXIF — most users don't enable Location for the iOS
+    Camera app, but the browser can request its own location permission
+    independently. The photo's EXIF DateTimeOriginal still has to be
+    within the freshness window (anti-camera-roll).
 
     Returns the new Submission row immediately, status=pending. The user can
     fetch the composed contribution card at GET /submissions/{id}/card.jpg.
@@ -102,6 +108,8 @@ async def capture(
             name=name,
             category=PlaceCategory(category),
             description=description,
+            lat=lat,
+            lng=lng,
         )
     except SubmissionRejectedError as e:
         # 422 to mirror the mission-capture failure shape — the upload
