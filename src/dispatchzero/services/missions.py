@@ -88,6 +88,17 @@ async def get_or_generate_mission(
     if not is_repeat:
         library_hit = await _library_lookup(db, place_id=place_id, style=style)
         if library_hit is not None:
+            # Re-normalize the sign-off on the way out. Old cached briefings
+            # may have em-dash sign-offs OR wrong-style sign-offs that were
+            # generated under earlier prompt regimes; strip + re-append in
+            # the current canonical form. Mutation is in-memory only — we
+            # don't commit, since rewriting the cached row on every read
+            # would be wasteful and races with other readers.
+            library_hit.briefing_text = _strip_any_signoff(library_hit.briefing_text)
+            library_hit.briefing_text = (
+                library_hit.briefing_text.rstrip()
+                + f"\n\n{_SIGNOFF_TITLES.get(style, '')}"
+            ).rstrip()
             return library_hit
 
     settings = get_settings()
@@ -240,35 +251,61 @@ _SIGNOFF_TITLES: dict[str, str] = {
 
 
 def _ensure_signoff(content: MissionContent, *, style: str) -> MissionContent:
-    """Guarantee the briefing ends with the correct '<Title> Zero' sign-off.
+    """Strip any sign-off the model produced and append the correct one.
 
-    The prompt asks the model to sign off, but a 13B model misses this rule
-    in roughly 1-of-3 generations on our hardware. Rather than burn another
-    25s repair-retry round trip on a stylistic fix-up, we patch the text in
-    code: if the expected sign-off is missing, append it. The 2200-char cap
-    is respected by trimming the body first if necessary.
+    The prompt tells the model NOT to sign off and NOT to mention the
+    handler name in the briefing body. This function is the enforcement:
+    it strips any trailing sign-off the model included (defensive against
+    rule violations AND against cached briefings from earlier prompt
+    regimes that DID sign off), then appends the code-controlled
+    sign-off in the canonical form (bare title, on its own line, no
+    leading mark).
 
-    Sign-off format is just the bare title on its own line, no em-dash or
-    other lead-in mark (Trevor's house style — no em-dashes in user text).
+    Sign-off format is just '<Title> Zero' on its own line after a blank
+    line. No em-dash or other lead-in mark (house style).
 
-    Wrong-title sign-offs (e.g. Guild output signed by Director Zero) are
-    left in place. Rare, and the auto-append would produce a weird double
-    sign-off. Logged as a known minor edge case rather than fixed.
+    Also applied to library hits (see get_or_generate_mission), so
+    cached missions with old em-dash sign-offs OR wrong-style sign-offs
+    get corrected on the way out without re-generating the whole brief.
     """
     title = _SIGNOFF_TITLES.get(style)
     if title is None:
         return content
-    # endswith catches the sign-off whether the model put a blank line before
-    # it or not. Strip trailing whitespace first so a stray newline doesn't
-    # defeat the match.
-    if content.briefing_text.rstrip().endswith(title):
-        return content
 
+    cleaned = _strip_any_signoff(content.briefing_text)
     suffix = f"\n\n{title}"
-    # MissionContent caps briefing_text at 2200 chars; reserve room for the suffix.
     max_body = 2200 - len(suffix)
-    body = content.briefing_text[:max_body].rstrip()
-    return content.model_copy(update={"briefing_text": body + suffix})
+    body = cleaned[:max_body].rstrip()
+    new_text = body + suffix
+    if new_text == content.briefing_text:
+        return content
+    return content.model_copy(update={"briefing_text": new_text})
+
+
+# Patterns the model might use to sign off, in any of the three styles.
+# Includes em-dash, hyphen, and bare-title variants so we can strip
+# cached old-format briefings AND any rule-violating fresh output.
+_SIGNOFF_LEAD_INS = ("— ", "- ", "")
+
+
+def _strip_any_signoff(text: str) -> str:
+    """Strip a trailing sign-off block from the end of `text`.
+
+    Looks for any of the three role titles at the very end (possibly
+    preceded by an em-dash or hyphen), removes that line, and returns
+    the body with trailing whitespace trimmed. Idempotent: if no sign-off
+    is present, returns the input unchanged.
+
+    Doesn't try to strip mid-text sign-offs (rare; would risk false
+    positives on phrases like 'as Director Zero noted before').
+    """
+    body = text.rstrip()
+    for candidate in _SIGNOFF_TITLES.values():
+        for lead in _SIGNOFF_LEAD_INS:
+            tag = f"{lead}{candidate}"
+            if body.endswith(tag):
+                return body[: -len(tag)].rstrip(" \t.,;:—-").rstrip()
+    return body
 
 
 def _try_parse(raw: str) -> MissionContent | None:

@@ -62,12 +62,9 @@ export async function dispatch({ id }) {
                    lineHeight: "1.7", margin: 0 },
         }, p),
       ),
-      mission.clue
-        ? el("div", { class: "stack", style: { gap: "var(--s-2)", marginTop: "var(--s-2)" } },
-            el("div", { class: "subtitle" }, "FIELD HINT"),
-            el("div", { class: "code", style: { fontSize: "var(--t-sm)" } }, mission.clue),
-          )
-        : null,
+      // (FIELD HINT block intentionally removed. The `clue` field still
+      // round-trips through the schema for now in case we want it back, but
+      // it doesn't render on this screen.)
     ),
     el("div", { class: "actions" }, acceptBtn),
   );

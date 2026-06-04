@@ -34,10 +34,19 @@ export async function transit({ id }) {
     "Closer, agent…");
   captureBtn.addEventListener("click", () => navigate(`/mission/${mission.id}/capture`));
 
+  // Stand-down link sits next to the capture button mid-mission. Native
+  // confirm() guard so a stray thumb-tap doesn't kill an active dispatch.
   const standDownLink = el("a", {
-    href: "/", "data-route": true, class: "muted",
+    href: "/",
+    class: "muted",
     style: { textAlign: "center", padding: "var(--s-2)", fontSize: "var(--t-xs)" },
   }, "Stand down");
+  standDownLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (window.confirm("Stand down? The active dispatch will be abandoned.")) {
+      navigate("/");
+    }
+  });
 
   let needsCompassPermission = false;
   if (typeof DeviceOrientationEvent !== "undefined" &&

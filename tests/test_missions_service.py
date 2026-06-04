@@ -84,6 +84,39 @@ def test_ensure_signoff_respects_2200_char_cap():
     assert out.briefing_text.endswith("Guildmaster Zero")
 
 
+def test_ensure_signoff_strips_em_dash_signoff_from_cached_briefing():
+    """Cached briefings from before the em-dash sweep look like
+    'text. — Director Zero'. _ensure_signoff should strip that and append
+    the bare-title version."""
+    c = _content("Travel to the target. Be quick. — Director Zero")
+    out = _ensure_signoff(c, style="agency")
+    assert out.briefing_text.endswith("Director Zero")
+    assert " — Director Zero" not in out.briefing_text
+    # And the body is preserved
+    assert "Travel to the target" in out.briefing_text
+
+
+def test_ensure_signoff_strips_wrong_style_signoff():
+    """If the model accidentally signed off as the wrong handler (e.g.
+    Pulp output signed by Guildmaster Zero), strip it and append the
+    correct one."""
+    c = _content("To the church, my friend, swiftly. — Guildmaster Zero")
+    out = _ensure_signoff(c, style="pulp")
+    assert out.briefing_text.endswith("Professor Zero")
+    assert "Guildmaster Zero" not in out.briefing_text
+
+
+def test_ensure_signoff_strips_bare_title_signoff():
+    """And the bare-title form (no leading mark) is recognized and
+    rewritten too — handles both fresh and old-style sign-offs."""
+    c = _content("Witness the threshold.\n\nGuildmaster Zero")
+    out = _ensure_signoff(c, style="guild")
+    # Idempotent in this case — already in canonical form
+    assert out.briefing_text.endswith("Guildmaster Zero")
+    # But only one sign-off, not two
+    assert out.briefing_text.count("Guildmaster Zero") == 1
+
+
 # ---------- repeat-visit prompt + flow ----------
 
 def test_build_mission_prompt_no_repeat_omits_followup_framing():

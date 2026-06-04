@@ -93,16 +93,14 @@ it should have. We want a current photograph. Professor Zero.'
 """
 
 _SIGN_OFF_RULE = (
-    " SIGN-OFF RULE, strict. End the briefing_text with the title on its own "
-    "line: 'Professor Zero', 'Director Zero', or 'Guildmaster Zero' as "
-    "appropriate to your style. Just the bare title. Do NOT put any "
-    "leading mark before the name (no em-dash, no hyphen, no 'Signed,', no "
-    "'From'). After the name, write NOTHING. "
-    "Forbidden after the name: any tagline ('Do be careful', 'Stay sharp', "
-    "'Safe travels'), any closing ('End of dispatch', 'Out', 'Over'), any "
-    "valediction ('Yours', 'Regards'), any stage direction, any additional "
-    "sentence of any kind. The title is the final text. Stop. "
-    "Do not append a postscript."
+    " SIGN-OFF RULE, strict. DO NOT sign the briefing. DO NOT include your "
+    "handler name ('Professor Zero', 'Director Zero', 'Guildmaster Zero') "
+    "anywhere in briefing_text. The system appends the sign-off after your "
+    "output, in a separate code step. Anything that looks like a sign-off "
+    "you write yourself (the title at the end, 'Signed', 'From', a tagline, "
+    "'End of dispatch', etc.) will be stripped and replaced. Write the "
+    "briefing as if dictated to a clerk for transcription. The clerk handles "
+    "the signature."
 )
 
 _PULP_SYSTEM = (
