@@ -188,11 +188,13 @@ export function report() {
         ),
       ),
       // margin:0 strips the default ~16px top/bottom <p> margin browsers
-      // apply — without this, the intro adds ~32px of dead space.
+      // apply. marginBottom: var(--s-3) buys back the extra space so the
+      // gap below the paragraph matches the gap above it (which carries
+      // the handler-row marginBottom).
       el("p", {
         style: {
           fontSize: "var(--t-sm)", lineHeight: "1.4", color: "var(--text)",
-          margin: "0",
+          margin: "0 0 var(--s-3) 0",
         },
       }, intro),
       form,
