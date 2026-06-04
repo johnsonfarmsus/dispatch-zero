@@ -102,17 +102,21 @@ async def create_submission(
 
     settings = get_settings()
 
-    # GPS comes from the browser (already validated above). We only consult
-    # the photo's EXIF for the timestamp, to enforce freshness.
+    # GPS comes from the browser (already validated above). EXIF timestamp
+    # is consulted ONLY as a sanity check — most web-captured photos via
+    # <input capture="environment"> have no EXIF timestamp at all (iOS
+    # strips it on capture), so a missing timestamp is fine. A PRESENT but
+    # stale timestamp still gets rejected (catches users who navigated to
+    # the photo library from inside the camera UI and picked an old shot).
     _, _, captured_at = _extract_exif(raw_photo)
 
     now = datetime.now(timezone.utc)
-    if captured_at is None:
-        raise SubmissionRejectedError("no capture timestamp in photo")
-    if (now - captured_at).total_seconds() > settings.exif_freshness_window_seconds:
-        raise SubmissionRejectedError(
-            "photo is too old; take a fresh one at the location"
-        )
+    if captured_at is not None:
+        age_seconds = (now - captured_at).total_seconds()
+        if age_seconds > settings.exif_freshness_window_seconds:
+            raise SubmissionRejectedError(
+                "photo is too old; take a fresh one at the location"
+            )
 
     # Allocate the Place's osm_id from the dedicated community sequence so
     # the (osm_type, osm_id) uniqueness constraint holds without picking IDs
