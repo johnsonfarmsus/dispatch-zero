@@ -36,9 +36,9 @@ from dispatchzero.models import OsmCredentials
 
 log = logging.getLogger(__name__)
 
-# OAuth scopes — match exactly what we ticked at app registration
-# time. read_prefs lets us read /user/details (to confirm the bot
-# identity); write_api lets us create changesets and nodes.
+# OAuth scopes. Must match exactly what we ticked at app registration
+# time. read_prefs lets us read /user/details (to confirm the connected
+# account identity); write_api lets us create changesets and nodes.
 _SCOPES = "read_prefs write_api"
 
 # Refresh access tokens this many seconds before they're due to expire,

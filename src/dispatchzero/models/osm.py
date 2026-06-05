@@ -1,4 +1,4 @@
-"""OSM integration models — bot credentials + publish audit log.
+"""OSM integration models: project-account credentials + publish audit log.
 
 See alembic/versions/0016_osm_integration.py for the schema rationale.
 """
@@ -25,7 +25,7 @@ from dispatchzero.models.base import Base
 
 
 class OsmCredentials(Base):
-    """Singleton row — only one OSM bot account publishes for this app."""
+    """Singleton row: only one OSM project account publishes for this app."""
 
     __tablename__ = "osm_credentials"
     __table_args__ = (

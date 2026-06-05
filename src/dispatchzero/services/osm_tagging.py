@@ -234,8 +234,8 @@ def tags_for_publish(
 
 def changeset_comment(*, place_name: str, category: str) -> str:
     """The comment= tag on the changeset itself. OSM lists changesets
-    in feeds, and this is what shows up next to the timestamp + the
-    bot username. Keep it short and accurate."""
+    in feeds, and this is what shows up next to the timestamp and the
+    account username. Keep it short and accurate."""
     if place_name:
         return f"Add {category}: {place_name} (via Dispatch Zero)"
     return f"Add {category} (via Dispatch Zero)"
