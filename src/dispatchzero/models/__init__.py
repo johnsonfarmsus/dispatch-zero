@@ -2,6 +2,7 @@ from dispatchzero.models.base import Base
 from dispatchzero.models.completion import Completion, LocationReason, MissionReason
 from dispatchzero.models.mission import Mission, MissionStatus
 from dispatchzero.models.mission_stop import MissionStop
+from dispatchzero.models.osm import OsmCredentials, OsmPublication
 from dispatchzero.models.place import Place, PlaceCategory, PlaceStatus
 from dispatchzero.models.submission import Submission, SubmissionStatus
 from dispatchzero.models.user import AdventureStyle, User
@@ -18,6 +19,8 @@ __all__ = [
     "MissionReason",
     "MissionStatus",
     "MissionStop",
+    "OsmCredentials",
+    "OsmPublication",
     "Place",
     "PlaceCategory",
     "PlaceStatus",

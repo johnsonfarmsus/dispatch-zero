@@ -19,6 +19,7 @@ import { historyDetail } from "./screens/history-detail.js";
 import { report } from "./screens/report.js";
 import { submissionDetail } from "./screens/submission-detail.js";
 import { securityProtocols } from "./screens/security-protocols.js";
+import { adminQueue } from "./screens/admin/queue.js";
 
 const root = document.getElementById("app");
 
@@ -61,6 +62,7 @@ async function bootstrap() {
   defineRoute("/submission/:id/debrief", (p) => submissionDetail(p));
   defineRoute("/submission/:id", (p) => submissionDetail(p));
   defineRoute("/security", () => securityProtocols());
+  defineRoute("/admin/queue", () => adminQueue());
   defineNotFound(() => (getUser() ? home() : anonLanding()));
 
   init(root);

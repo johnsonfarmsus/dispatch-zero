@@ -29,7 +29,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from dispatchzero.models.base import Base
@@ -53,10 +53,16 @@ class Submission(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    place_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable + SET NULL on delete: when a reviewer Returns a submission,
+    # the linked Place is hard-deleted (it would only sit in the places
+    # table as orphan clutter, status=pending and forever excluded from
+    # dispatch). place_id becomes NULL on the surviving Submission row so
+    # the user's dossier history still reads the submission card. See
+    # services.submissions.reject_submission + migration 0015.
+    place_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("places.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("places.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Filesystem path to the saved (EXIF-stripped) submission photo. Lives
@@ -68,6 +74,14 @@ class Submission(Base):
     # User-typed description, max 140 chars. Optional but encouraged — gives
     # the reviewer context and feeds the briefing prompt later.
     description: Mapped[str | None] = mapped_column(String(140), nullable=True)
+
+    # Optional URL the submitter provides (Wikipedia article, official site,
+    # local history page, etc.). On OSM publish:
+    #   - wikipedia.org URLs → derive wikipedia=<lang>:<title> tag
+    #   - other URLs → website=<url> tag
+    # Surfaced to the admin as a clickable line on the review-queue card so
+    # they can verify the place before approving.
+    external_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default="pending"
@@ -95,4 +109,32 @@ class Submission(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
+    )
+
+    # Optional reviewer-attached note shown on the submitter's dossier card
+    # when the submission is RETURNED. Surfaces "why" so the submitter isn't
+    # left guessing — used at the reviewer's discretion; blank when there's
+    # nothing useful to add.
+    review_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # Captured at the moment of Return (or at any future point where the
+    # linked Place gets deleted out from under us). Lets the dossier list
+    # render "Combine Mural" even after the orphan Place row has been
+    # nuked. Pending + Approved submissions always read the live place.name;
+    # only Returned submissions consult this snapshot.
+    place_name_snapshot: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # OSM pre-flight check results. Populated by a background task fired
+    # after the submission row commits — we query OSM for matching POIs
+    # within ~50m and store what we found. ADVISORY ONLY: surfaced on the
+    # admin review card so the reviewer knows whether the area is dense
+    # with similar OSM nodes before approving / submitting to OSM. Does
+    # not gate any action. See services.osm_preflight + migration 0019.
+    osm_preflight_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # JSONB array of nearby matches, each {name, osm_type, osm_id, osm_url,
+    # distance_m, tags_summary}. Empty array means "ran, found none."
+    osm_preflight_matches: Mapped[list | None] = mapped_column(
+        JSONB, nullable=True
     )

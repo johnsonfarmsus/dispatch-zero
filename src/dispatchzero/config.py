@@ -55,6 +55,35 @@ class Settings(BaseSettings):
     rate_limit_mission_generate_per_day: int = 50
     rate_limit_signup_per_ip_per_hour: int = 10
 
+    # ---- OSM integration ----
+    # OAuth 2.0 client registered at openstreetmap.org/oauth2/applications.
+    # Empty by default so dev/test environments without OSM creds boot fine —
+    # the admin "Connect OSM" path is what catches the missing creds.
+    osm_client_id: str = ""
+    osm_client_secret: str = ""
+    # When true, publish_to_osm builds the changeset XML and records an
+    # osm_publications row with dry_run=true but does NOT make any HTTP
+    # call to OSM. Lets us verify the round-trip (OAuth + tag mapping +
+    # XML construction) before any real edit lands. Flip to false when
+    # you've eyeballed enough dry-run output to trust the pipeline.
+    osm_dry_run: bool = True
+    # OSM API host + OAuth endpoints. Always production (no separate dev
+    # server config) — dry-run mode is the safety lever.
+    osm_base_url: str = "https://api.openstreetmap.org"
+    osm_oauth_base_url: str = "https://www.openstreetmap.org"
+    # Daily cap on REAL publishes (dry-run rows don't count). Hit it and
+    # the Approve+OSM button is disabled until tomorrow UTC; regular
+    # Approve still works.
+    osm_daily_publish_cap: int = 5
+    # User-Agent string on every OSM HTTP call. OSM admins watch for
+    # apps that don't identify themselves; this is how we stay above
+    # board. Bump the version on substantive logic changes.
+    osm_user_agent: str = "Dispatch Zero/0.1 (https://dispatchzero.ataary.com)"
+    # Public URL of this app, used to build the OAuth redirect URI sent
+    # to OSM during the connect flow. MUST match what's registered on the
+    # OSM app: redirect_uri value goes through verbatim.
+    osm_redirect_uri: str = "https://dispatchzero.ataary.com/admin/osm/callback"
+
 
 @lru_cache
 def get_settings() -> Settings:

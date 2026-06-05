@@ -27,9 +27,9 @@ Pure documentation/typo PRs are fast-pathed.
 
 In rough order of "yes please" → "probably not":
 
-- **Yes please:** rural-area data sources (HIFLD, Overture Maps, state-specific GIS layers), new GNIS importer feature classes, additional handler personas (with prompts + voice samples), accessibility improvements, mobile UX polish, test coverage gaps.
-- **Probably yes, with discussion:** new discovery tiers, additional auth methods (passkeys), federation between instances.
-- **Probably not:** anything that requires non-AGPL dependencies, anything that adds tracking/analytics, anything that breaks the "no email, no PII" data model.
+- **Yes please:** OSM round-trip improvements (better category-to-tag mapping, Wikidata enrichment on wp-sourced publishes, additional ambiguous-category subtype pickers), additional handler personas (with prompts + voice samples), accessibility improvements, mobile UX polish, test coverage gaps.
+- **Probably yes, with discussion:** new discovery tiers, additional auth methods (passkeys), federation between instances, rural-area data sources (HIFLD, Overture Maps, state-specific GIS layers) and new GNIS importer feature classes as fallbacks for areas where OSM coverage is thin.
+- **Probably not:** anything that requires non-AGPL dependencies, anything that adds tracking/analytics, anything that breaks the "no email, no PII" data model, anything that publishes to OSM without explicit per-edit reviewer approval.
 
 ## Development setup
 

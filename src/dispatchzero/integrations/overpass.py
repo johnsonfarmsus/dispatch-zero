@@ -12,7 +12,22 @@ _BASE_URL = "https://overpass-api.de/api/interpreter"
 _USER_AGENT = "dispatchzero/0.1 (trevor@johnsonfarms.us)"
 _CACHE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
-# OSM tag selectors per category. Keep these explicit and reviewable.
+# OSM tag selectors per category.
+#
+# STRICT tier (this dict): the curated, high-signal cultural/artistic finds.
+# Tier 1 of the dispatch ladder queries these — what we want users to find
+# first when they request a dispatch. Murals, sculptures, monuments,
+# memorials, narrow-definition historic buildings, viewpoints. Anything in
+# strict has been hand-picked for "this is the kind of thing the game is
+# really about."
+#
+# BROAD tier (the dict below): everything else worth visiting that's
+# common enough to warrant inclusion but doesn't rise to "primary find"
+# status — churches, post offices, libraries, cemeteries, parks, peaks,
+# waterfalls, etc. Tiers 2 and 4 of the ladder pull from broad.
+#
+# The strict-first bias preserves the game's character: a user in an
+# art-rich town gets art before they get a post office.
 _CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
     PlaceCategory.MURAL: [
         '["artwork_type"="mural"]',
@@ -31,11 +46,17 @@ _CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
         '["historic"="archaeological_site"]',
     ],
     PlaceCategory.VIEWPOINT: ['["tourism"="viewpoint"]'],
+    # CIVIC intentionally absent from strict: post offices / libraries /
+    # town halls are everyday landmarks, not primary finds. They live in
+    # broad below so users discover them after the art layer is exhausted.
 }
 
-# Broader fallback filters — used when the strict set returns no eligible results.
-# These pull in named parks, places of worship, peaks, fountains, towers, etc.
-# Quality bar drops; coverage rises.
+# Broad tier — populated for nearly every category. Pulls in named parks,
+# places of worship, post offices, libraries, town halls, cemeteries,
+# peaks, fountains, towers, etc. Quality bar drops; coverage rises.
+# The full GNIS layer used to backfill these gaps; OSM coverage of the
+# same data is consistently better, so as of the 0019-ish refactor we
+# pull everything from OSM and the local DB is empty.
 _BROAD_CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
     PlaceCategory.MURAL: [],  # nothing reasonable to add here
     PlaceCategory.SCULPTURE: [
@@ -45,9 +66,20 @@ _BROAD_CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
     PlaceCategory.MEMORIAL: [
         '["historic"="wayside_cross"]["name"]',
         '["historic"="wayside_shrine"]["name"]',
+        # Cemeteries function as memorials — every headstone is one,
+        # and the whole site reads as a memorial landscape. Require name
+        # to filter out generic plots.
+        '["landuse"="cemetery"]["name"]',
+        '["amenity"="grave_yard"]["name"]',
+        # Roadside historical markers / mile markers / boundary stones.
+        '["historic"="cannon"]["name"]',
+        '["historic"="milestone"]["name"]',
+        '["historic"="boundary_marker"]["name"]',
     ],
     PlaceCategory.HISTORIC: [
-        '["amenity"="place_of_worship"]["name"]',
+        # Note: place_of_worship MOVED to CHURCH broad below where it
+        # belongs semantically. Historic broad now keeps only the
+        # specific historic-building types.
         '["historic"="castle"]["name"]',
         '["historic"="manor"]["name"]',
         '["historic"="fort"]["name"]',
@@ -62,6 +94,17 @@ _BROAD_CATEGORY_FILTERS: dict[PlaceCategory, list[str]] = {
         '["natural"="waterfall"]["name"]',
         '["leisure"="park"]["name"]',
         '["tourism"="attraction"]["name"]',
+    ],
+    # New in the broad-tier expansion: pull churches, post offices,
+    # libraries, town halls directly from OSM. Each requires a name so
+    # we don't surface generic chapel-shaped buildings or PO boxes.
+    PlaceCategory.CHURCH: [
+        '["amenity"="place_of_worship"]["name"]',
+    ],
+    PlaceCategory.CIVIC: [
+        '["amenity"="post_office"]["name"]',
+        '["amenity"="library"]["name"]',
+        '["amenity"="townhall"]["name"]',
     ],
 }
 
@@ -85,19 +128,27 @@ def build_query(
     categories: Iterable[PlaceCategory],
     broad: bool = False,
 ) -> str:
+    """Build an Overpass QL string covering every requested category's
+    strict filters (plus broad filters when broad=True).
+
+    Only node + way are queried. relation is intentionally excluded:
+    on real-world Overpass servers, an `around:` filter on relation
+    can trip on a large nearby boundary multi-polygon and time the
+    whole query out at 25-30s with zero useful results returned.
+    Almost no POI we care about is a relation (place_of_worship is
+    ~always a node or way; same for art, viewpoints, post offices).
+    """
     parts: list[str] = []
     for cat in categories:
-        # Some categories (e.g. CHURCH) intentionally have no OSM query —
-        # they're sourced exclusively from GNIS / the local DB tier.
         filters = list(_CATEGORY_FILTERS.get(cat, []))
         if broad:
             filters.extend(_BROAD_CATEGORY_FILTERS.get(cat, []))
         for filt in filters:
             parts.append(f"node{filt}(around:{radius_m},{lat},{lng});")
             parts.append(f"way{filt}(around:{radius_m},{lat},{lng});")
-            parts.append(f"relation{filt}(around:{radius_m},{lat},{lng});")
     body = "(" + "".join(parts) + ");"
-    return f"[out:json][timeout:25];{body}out center tags;"
+    # Generous timeout — broad queries with many filters can be heavy.
+    return f"[out:json][timeout:60];{body}out center tags;"
 
 
 def _cache_key(
@@ -141,8 +192,15 @@ def _classify(tags: dict) -> PlaceCategory | None:
     amenity = tags.get("amenity")
     if amenity == "fountain":
         return PlaceCategory.SCULPTURE
+    # place_of_worship now goes to CHURCH (was HISTORIC) so the broad
+    # tier surfaces churches as their own category rather than mixed
+    # with castles, ruins, and lighthouses.
     if amenity == "place_of_worship":
-        return PlaceCategory.HISTORIC
+        return PlaceCategory.CHURCH
+    if amenity in ("post_office", "library", "townhall"):
+        return PlaceCategory.CIVIC
+    if amenity == "grave_yard":
+        return PlaceCategory.MEMORIAL
     man_made = tags.get("man_made")
     if man_made == "sculpture":
         return PlaceCategory.SCULPTURE
@@ -155,6 +213,13 @@ def _classify(tags: dict) -> PlaceCategory | None:
         return PlaceCategory.VIEWPOINT
     if tags.get("tourism") == "attraction":
         return PlaceCategory.VIEWPOINT
+    # landuse=cemetery (the polygon variant; amenity=grave_yard is the
+    # smaller parish-style alternative handled above).
+    if tags.get("landuse") == "cemetery":
+        return PlaceCategory.MEMORIAL
+    # Extra historic-marker variants surfaced via the broad MEMORIAL tier.
+    if historic in ("cannon", "milestone", "boundary_marker"):
+        return PlaceCategory.MEMORIAL
     return None
 
 

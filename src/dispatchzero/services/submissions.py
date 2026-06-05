@@ -71,6 +71,7 @@ async def create_submission(
     description: str | None,
     lat: float,
     lng: float,
+    external_link: str | None = None,
 ) -> Submission:
     """Process a community POI submission end-to-end.
 
@@ -97,6 +98,19 @@ async def create_submission(
         description = description.strip() or None
     if description is not None and len(description) > 140:
         raise SubmissionRejectedError("description too long (max 140 chars)")
+    # External link: validate as http(s) URL if present, drop blank strings,
+    # cap length. Bad-form URLs reject early so we don't store junk that
+    # would later fail the OSM tag normalization.
+    if external_link is not None:
+        from dispatchzero.services.url_parsing import normalize_url
+        cleaned_link = normalize_url(external_link)
+        if external_link.strip() and cleaned_link is None:
+            raise SubmissionRejectedError(
+                "link must be a valid http(s) URL or left blank",
+            )
+        external_link = cleaned_link
+        if external_link is not None and len(external_link) > 500:
+            raise SubmissionRejectedError("link too long (max 500 chars)")
     if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
         raise SubmissionRejectedError("invalid coordinates")
 
@@ -150,6 +164,7 @@ async def create_submission(
         place_id=place.id,
         photo_url="",  # filled in below once we know the path
         description=description,
+        external_link=external_link,
         status=SubmissionStatus.PENDING.value,
         share_token=secrets.token_urlsafe(7),
     )
@@ -223,8 +238,24 @@ async def reject_submission(
     db: AsyncSession,
     reviewer: User,
     submission_id: uuid.UUID,
+    note: str | None = None,
 ) -> Submission:
-    """Flip submission to RETURNED, leave Place at PENDING (dead-end), re-stamp card."""
+    """Flip submission to RETURNED, snapshot the place name, hard-delete the
+    orphaned Place row, re-stamp the contribution card.
+
+    `note` is the optional short message the reviewer wants the submitter to
+    see on their dossier card. Trimmed; blank strings collapse to NULL. Hard
+    cap of 200 chars (matches the column); anything longer is silently
+    truncated.
+
+    Place deletion semantics: the linked Place row would otherwise sit
+    forever as status=PENDING clutter (excluded from dispatch, but still in
+    the table). We snapshot place.name onto submission.place_name_snapshot
+    so the user's dossier history still reads "Combine Mural — RETURNED"
+    even after the Place is gone, then DELETE the Place. The FK is
+    SET NULL on delete, so the Submission survives with place_id=NULL.
+    The contribution card image on disk (the user-facing artifact) is left
+    alone — it still has the place name baked into the JPEG."""
     submission, place = await _load(db, submission_id)
 
     if submission.status == SubmissionStatus.RETURNED.value:
@@ -233,9 +264,25 @@ async def reject_submission(
     submission.status = SubmissionStatus.RETURNED.value
     submission.reviewed_at = datetime.now(timezone.utc)
     submission.reviewer_user_id = reviewer.id
+    if note is not None:
+        cleaned = note.strip()
+        submission.review_note = cleaned[:200] if cleaned else None
+
+    # Snapshot the name BEFORE deleting the Place, so the dossier list still
+    # has something to render after the FK goes NULL.
+    submission.place_name_snapshot = (place.name or "")[:200] or None
 
     submitter = await _load_user(db, submission.user_id)
+    # Re-stamp the card before we delete the Place, because _restamp_card
+    # reads place.name. After this returns, the JPEG on disk is independent
+    # of the DB row, so deleting the Place doesn't break the artifact.
     await _restamp_card(submission, place, submitter, SubmissionStatus.RETURNED)
+
+    # Delete the orphan Place. The Submission's FK (place_id) is SET NULL
+    # ondelete, so submission.place_id becomes NULL as part of the same
+    # transaction. Anyone reading the submission post-return falls back to
+    # place_name_snapshot for display.
+    await db.delete(place)
 
     await db.commit()
     await db.refresh(submission)

@@ -93,6 +93,20 @@ export async function submissionDetail({ id }) {
           maxWidth: "480px",
         },
       }, statusBlurb),
+      // Reviewer note (returned submissions only). Rendered as a quoted
+      // block so it reads as a message from the Archive rather than part
+      // of the user's own description. Pending / approved never have one.
+      submission.status === "returned" && submission.review_note
+        ? el("blockquote", {
+            style: {
+              maxWidth: "480px", margin: "0", padding: "var(--s-3) var(--s-4)",
+              borderLeft: "2px solid var(--accent-dim)",
+              background: "var(--surface-raised)",
+              fontSize: "var(--t-sm)", lineHeight: "1.5",
+              color: "var(--text)", fontStyle: "italic",
+            },
+          }, `"${submission.review_note}"`)
+        : null,
     ),
     el("div", { class: "actions" },
       copyLink,

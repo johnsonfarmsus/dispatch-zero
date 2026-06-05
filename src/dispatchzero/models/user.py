@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,14 @@ class User(Base):
 
     missions_this_week: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     missions_last_week: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # When true, /admin/* routes respond normally; when false, they 404.
+    # Flipped per-user via `python -m dispatchzero.tools.user_admin promote`
+    # (see migration 0014 + tools/user_admin.py). Default false; signup
+    # never sets this true.
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

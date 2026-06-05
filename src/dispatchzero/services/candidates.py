@@ -39,18 +39,23 @@ from dispatchzero.services.discovery import discover_nearby
 
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
-# Per-tier (radius_m, source, broad) — matches the existing _REQUEST_TIERS
-# from missions/routes.py but the BEHAVIOR is different: we don't stop at
-# first hit, we accumulate across tiers until we have N candidates.
-# Six-tier ladder: close art first, broaden the OSM net, fall through to
-# Wikipedia, then a wider OSM sweep, then the curated local DB.
+# Per-tier (radius_m, source, broad) — mirrors _REQUEST_TIERS in
+# missions/routes.py but accumulates across tiers instead of stopping at
+# the first hit. Five-tier ladder: close art first, broaden the OSM net,
+# fall through to Wikipedia, then a wider OSM sweep.
+#
+# Tier 5 (10km local GNIS) was removed when the broad-tier expansion
+# absorbed all the categories GNIS used to cover (churches, post offices,
+# parks, trails, etc.). OSM coverage of the same coordinates is better,
+# so the local fallback was costing quality more than it contributed.
 _CANDIDATE_TIERS: list[tuple[int, str, bool]] = [
     (2000, "overpass", False),   # Tier 0: 2km narrow OSM (caller's default radius)
-    (5000, "overpass", False),   # Tier 1: 5km strict OSM
+    (5000, "overpass", False),   # Tier 1: 5km strict OSM — art-first
     (5000, "overpass", True),    # Tier 2: 5km broad OSM
     (5000, "wikipedia", False),  # Tier 3: Wikipedia geosearch
-    (10000, "overpass", True),   # Tier 4: 10km broad OSM (wider sweep before curated)
-    (10000, "local", False),     # Tier 5: 10km local GNIS / curated
+    (10000, "overpass", True),   # Tier 4: 10km broad OSM
+    (10000, "local", False),     # Tier 5: 10km local DB — surfaces community
+                                 # submissions that aren't on OSM yet.
 ]
 
 

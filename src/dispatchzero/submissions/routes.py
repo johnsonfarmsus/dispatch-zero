@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -37,24 +37,34 @@ router = APIRouter(prefix="/submissions", tags=["submissions"])
 
 class SubmissionOut(BaseModel):
     id: uuid.UUID
-    place_id: uuid.UUID
+    # Nullable because the linked Place is hard-deleted when a submission is
+    # Returned (see services.submissions.reject_submission). The submitter's
+    # dossier still renders the card via place_name_snapshot in that case.
+    place_id: uuid.UUID | None = None
     status: str
     description: str | None
+    external_link: str | None = None
     share_token: str
     submitted_at: str  # ISO 8601
+    # Optional reviewer note shown alongside the RETURNED stamp on the
+    # submitter's dossier card. None for pending / approved submissions
+    # and for returned ones where the reviewer didn't leave a note.
+    review_note: str | None = None
 
 
 class SubmissionListItem(BaseModel):
     """Slimmer payload for dossier-list rendering. Mirrors CompletionListItem
     so the frontend can stack both into one list ordered by date."""
     id: uuid.UUID
-    place_id: uuid.UUID
+    place_id: uuid.UUID | None = None
     place_name: str | None
     place_category: str
     description: str | None
+    external_link: str | None = None
     status: str
     share_token: str
     submitted_at: str  # ISO 8601
+    review_note: str | None = None
 
 
 def _submission_to_out(s: Submission) -> SubmissionOut:
@@ -63,8 +73,10 @@ def _submission_to_out(s: Submission) -> SubmissionOut:
         place_id=s.place_id,
         status=s.status,
         description=s.description,
+        external_link=s.external_link,
         share_token=s.share_token,
         submitted_at=s.submitted_at.isoformat(),
+        review_note=s.review_note,
     )
 
 
@@ -78,12 +90,14 @@ _CATEGORY_VALUES = Literal[
 async def capture(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
+    background_tasks: BackgroundTasks,
     photo: Annotated[UploadFile, File(description="Captured photo")],
     name: Annotated[str, Form(min_length=1, max_length=200)],
     category: Annotated[_CATEGORY_VALUES, Form()],
     lat: Annotated[float, Form(ge=-90.0, le=90.0)],
     lng: Annotated[float, Form(ge=-180.0, le=180.0)],
     description: Annotated[str | None, Form(max_length=140)] = None,
+    link: Annotated[str | None, Form(max_length=500)] = None,
 ) -> SubmissionOut:
     """Submit a community POI.
 
@@ -108,6 +122,7 @@ async def capture(
             name=name,
             category=PlaceCategory(category),
             description=description,
+            external_link=link,
             lat=lat,
             lng=lng,
         )
@@ -116,6 +131,15 @@ async def capture(
         # passed structural validation but failed semantic checks
         # (EXIF, freshness, content).
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
+
+    # Fire the OSM pre-flight check after the response goes out. The
+    # background task owns its own DB session (the request's is gone by
+    # then). Failure here doesn't surface to the user — the admin queue
+    # will show the submission with "pre-flight pending" until either
+    # the check finishes or stays unfinished forever (latter is rare).
+    from dispatchzero.services.osm_preflight import run_for_submission
+    background_tasks.add_task(run_for_submission, submission.id)
+
     return _submission_to_out(submission)
 
 
@@ -126,11 +150,16 @@ async def list_submissions(
 ) -> list[SubmissionListItem]:
     """The current user's submissions, newest first. The dossier screen
     fetches this alongside /missions/completions and merges the two lists
-    by date so the user sees one unified history."""
+    by date so the user sees one unified history.
+
+    LEFT JOIN on Place because Returned submissions can have a NULL place_id
+    (the orphan Place was hard-deleted at return time — see
+    services.submissions.reject_submission). When the live Place is gone,
+    fall back to the place_name_snapshot stored on the Submission row."""
     rows = (
         await db.execute(
             select(Submission, Place)
-            .join(Place, Place.id == Submission.place_id)
+            .outerjoin(Place, Place.id == Submission.place_id)
             .where(Submission.user_id == user.id)
             .order_by(Submission.submitted_at.desc())
             .limit(50)
@@ -139,13 +168,15 @@ async def list_submissions(
     return [
         SubmissionListItem(
             id=s.id,
-            place_id=p.id,
-            place_name=p.name,
-            place_category=p.category,
+            place_id=(p.id if p is not None else None),
+            place_name=(p.name if p is not None else s.place_name_snapshot),
+            place_category=(p.category if p is not None else "community"),
             description=s.description,
+            external_link=s.external_link,
             status=s.status,
             share_token=s.share_token,
             submitted_at=s.submitted_at.isoformat(),
+            review_note=s.review_note,
         )
         for s, p in rows
     ]
@@ -157,7 +188,7 @@ async def get_submission(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> SubmissionOut:
-    submission = await _load_self(db, submission_id, user)
+    submission = await _load_visible(db, submission_id, user)
     return _submission_to_out(submission)
 
 
@@ -167,7 +198,7 @@ async def submission_photo(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> FileResponse:
-    submission = await _load_self(db, submission_id, user)
+    submission = await _load_visible(db, submission_id, user)
     if not submission.photo_url:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")
     photo_path = Path(submission.photo_url)
@@ -185,7 +216,7 @@ async def submission_card(
     """Composed contribution card. Status stamp tracks the workflow (PENDING /
     VERIFIED / RETURNED). The route doesn't regenerate — that happens in
     services.submissions when status changes."""
-    submission = await _load_self(db, submission_id, user)
+    submission = await _load_visible(db, submission_id, user)
     if not submission.card_path:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "card missing")
     card_path = Path(submission.card_path)
@@ -194,14 +225,19 @@ async def submission_card(
     return FileResponse(card_path, media_type="image/jpeg")
 
 
-async def _load_self(
+async def _load_visible(
     db: AsyncSession, submission_id: uuid.UUID, user: User,
 ) -> Submission:
+    """Look up a submission that the requester is allowed to see.
+
+    Submitters can see their own submissions; admins can see everyone's
+    (needed so the /admin/* review queue can render photos + cards via
+    these same endpoints rather than duplicating routes under /admin)."""
     submission = (
         await db.execute(select(Submission).where(Submission.id == submission_id))
     ).scalar_one_or_none()
     if submission is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
-    if submission.user_id != user.id:
+    if submission.user_id != user.id and not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not your submission")
     return submission

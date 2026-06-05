@@ -74,6 +74,7 @@ async def _user_to_me(db: AsyncSession, user: User) -> MeOut:
         missions_this_week=user.missions_this_week,
         rank=completions_to_rank(int(completions)),
         pending_submissions=int(pending),
+        is_admin=user.is_admin,
     )
 
 

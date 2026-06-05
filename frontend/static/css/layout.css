@@ -123,10 +123,16 @@
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: var(--t-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  /* Inherit body font + base size so these read as the same kind of
+     "tap me" element as the primary Request Dispatch button. Previously
+     used mono + uppercase + letter-spacing, which made History/Settings/
+     Report look like a different control category than the primary
+     button. Title case + sans-serif unifies the home screen's action
+     stack. The // SECURITY PROTOCOLS // footer link keeps its mono/
+     uppercase treatment via inline styles since it's a policy link,
+     not an action. */
+  font-family: var(--font-body);
+  font-size: var(--t-base);
   transition: background 80ms, color 80ms;
 }
 .secondary-action:hover {

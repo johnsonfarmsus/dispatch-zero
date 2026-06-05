@@ -13,7 +13,8 @@ const TAGLINES = {
 };
 
 export function stylePicker() {
-  const current = getUser()?.adventure_style || "agency";
+  const user = getUser();
+  const current = user?.adventure_style || "agency";
   const errEl = el("div", { class: "fault", hidden: true });
   const logoutLink = el("a", { href: "#", class: "muted" }, "Log Out");
   logoutLink.addEventListener("click", async (e) => {
@@ -22,6 +23,14 @@ export function stylePicker() {
     clearUser();
     await navigate("/", { replace: true });
   });
+
+  // Admin link — only rendered for users whose /auth/me payload had
+  // is_admin=true. Non-admins never see the link at all (consistent with
+  // the 404 posture of the backend admin routes — the surface stays
+  // invisible to randos).
+  const adminLink = user?.is_admin
+    ? el("a", { href: "/admin/queue", "data-route": true, class: "muted" }, "Admin")
+    : null;
 
   function styleOption(s) {
     const isCurrent = s === current;
@@ -81,10 +90,16 @@ export function stylePicker() {
         href: "/", "data-route": true, class: "muted",
         style: { textAlign: "center", padding: "var(--s-2)" },
       }, "Back to Home"),
-      // Account action — lives here in Settings rather than on the main
-      // dashboard, where it was easy to misfire near the Request Dispatch
-      // button.
-      logoutLink,
+      // Bottom row: Log Out on the left mirrors Admin on the right (for
+      // admins only). Both are muted text links rather than buttons —
+      // they're settings-page actions, not primary affordances.
+      el("div", {
+        class: "row",
+        style: { justifyContent: "space-between", alignItems: "center" },
+      },
+        logoutLink,
+        adminLink || el("span", { style: { visibility: "hidden" } }, ""),
+      ),
     ),
   );
 }

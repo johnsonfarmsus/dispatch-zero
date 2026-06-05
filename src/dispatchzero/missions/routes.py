@@ -170,17 +170,22 @@ async def generate(
 _REQUEST_TIERS: list[tuple[int, str, bool]] = [
     # (radius_m, source, broad)
     # Tier 0 is dynamic — uses payload.radius_m with overpass+strict (typically 2km)
-    (5000, "overpass", False),   # Tier 1: 5km strict OSM
-    (5000, "overpass", True),    # Tier 2: 5km broad OSM (parks, peaks, churches, etc)
+    (5000, "overpass", False),   # Tier 1: 5km strict OSM — art-first
+    (5000, "overpass", True),    # Tier 2: 5km broad OSM — churches, post offices,
+                                 # libraries, cemeteries, parks, peaks
     (5000, "wikipedia", False),  # Tier 3: 5km Wikipedia geosearch (global coverage)
-    (10000, "overpass", True),   # Tier 4: 10km broad OSM — one wider sweep of OSM
-                                 # before falling to curated data; catches semi-rural
+    (10000, "overpass", True),   # Tier 4: 10km broad OSM — wider sweep of broad
+                                 # categories before giving up. Catches semi-rural
                                  # towns where the 5km tiers came up empty but OSM
                                  # has a nearby churchyard, trailhead, etc.
-    (10000, "local", False),     # Tier 5: 10km local DB (GNIS + curated). Rural
-                                 # coverage fallback. Bumped from 5km to 10km when
-                                 # the tier ladder was reworked — by the time we're
-                                 # this deep, "walking distance" already lost.
+    (10000, "local", False),     # Tier 5: 10km local DB — community submissions
+                                 # + any already-ingested OSM/Wikipedia places.
+                                 # When GNIS got dropped the local table shrank
+                                 # to ~hundreds of rows; the OSM-derived ones
+                                 # would dedup against earlier tiers anyway, but
+                                 # community-approved POIs need this tier to be
+                                 # dispatchable until they're published to OSM
+                                 # (after which the OSM tiers cover them).
 ]
 
 
@@ -455,13 +460,18 @@ async def completion_photo(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> FileResponse:
-    """Serve the saved 600px capture as a small thumbnail for list views."""
+    """Serve the saved 600px capture as a small thumbnail for list views.
+
+    Owner-or-admin visible: admins need to view any user's completion
+    photo to evaluate completion-driven OSM publish candidates in the
+    review queue. Same pattern as services/submissions._load_visible
+    widened earlier for the submission card route."""
     completion = (
         await db.execute(select(Completion).where(Completion.id == completion_id))
     ).scalar_one_or_none()
     if completion is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "completion not found")
-    if completion.user_id != user.id:
+    if completion.user_id != user.id and not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "not your completion")
     if not completion.photo_url:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "photo missing")

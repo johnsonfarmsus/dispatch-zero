@@ -23,7 +23,11 @@ import { api } from "../api.js";
 import { getUser } from "../state.js";
 import { navigate } from "../router.js";
 import { styleMeta } from "../style-meta.js";
-import { getFreshFix } from "../flow.js";
+import {
+  getFreshFix,
+  startWatchingPosition,
+  stopWatchingPosition,
+} from "../flow.js";
 
 const _INTROS = {
   agency: (
@@ -63,6 +67,16 @@ export function report() {
   const intro = _INTROS[style] || _INTROS.agency;
   const handler = styleMeta(style);
 
+  // Pre-warm GPS the moment this screen mounts. While the user reads the
+  // intro, walks toward the subject, opens the camera, and returns from
+  // capture, watchPosition is continuously updating the cached _lastFix
+  // with REAL recent positions. Without this, the first time getCurrentPosition
+  // gets called is post-camera-return, when iOS may serve a long-stale
+  // "last known" fix from before the camera-app suspended Safari (which is
+  // what landed the Combine Mural at the submitter's house on the first
+  // real-world test). Cleanup stops the watcher on screen unmount.
+  startWatchingPosition();
+
   // Held in closure across the lifecycle of this screen.
   let photoFile = null;
   let photoFix = null;  // { lat, lng, accuracy_m? }
@@ -80,8 +94,19 @@ export function report() {
   const descInput = el("textarea", {
     maxlength: "140", rows: "2",
     placeholder:
-      "Optional. One sentence on why this place is worth a dispatch.",
+      "A sentence on why — or leave blank if a link below tells the story.",
     style: { resize: "vertical" },
+  });
+  // Optional link field — separate from the description so we can detect
+  // Wikipedia URLs and use them as OSM wikipedia= tags on publish. Any
+  // other valid http(s) URL becomes the OSM website= tag. Blank is fine.
+  const linkInput = el("input", {
+    type: "url",
+    maxlength: "500",
+    autocapitalize: "off",
+    autocorrect: "off",
+    spellcheck: "false",
+    placeholder: "https://en.wikipedia.org/wiki/... (optional)",
   });
 
   // Hidden file input. Wrapped by the addPhotoLabel below so iOS opens
@@ -144,6 +169,10 @@ export function report() {
       el("span", { class: "subtitle" }, "Why this place? (optional)"),
       descInput,
     ),
+    el("label", { class: "stack", style: { gap: "2px" } },
+      el("span", { class: "subtitle" }, "Link (optional)"),
+      linkInput,
+    ),
     errEl,
   );
 
@@ -176,8 +205,13 @@ export function report() {
     photoStatus.style.color = "var(--text-muted)";
     photoStatus.textContent = "Locking location…";
     try {
+      // 3-second staleness window. The watchPosition we started on mount
+      // should be updating _lastFix every few seconds while the user is
+      // standing at the subject, so a fresh sub-3s fix is normally already
+      // in cache by the time we get here. If not, getFreshFix falls through
+      // to getCurrentPosition (maximumAge:0) and waits for a real fix.
       photoFix = await getFreshFix({
-        maxAgeMs: 60000,
+        maxAgeMs: 3000,
         enableHighAccuracy: true,
         timeoutMs: 30000,
       });
@@ -186,7 +220,10 @@ export function report() {
       addPhotoLabel.style.display = "none";
       submitBtn.style.display = "block";
       photoStatus.style.color = "var(--accent)";
-      photoStatus.textContent = "Photo and location ready.";
+      const accuracy = photoFix.accuracy_m;
+      photoStatus.textContent = accuracy
+        ? `Photo and location ready (±${Math.round(accuracy)}m).`
+        : "Photo and location ready.";
       refreshSubmitGate();
     } catch (err) {
       photoFix = null;
@@ -240,6 +277,9 @@ export function report() {
       fd.append("lng", String(photoFix.lng));
       if (descInput.value.trim()) {
         fd.append("description", descInput.value.trim());
+      }
+      if (linkInput.value.trim()) {
+        fd.append("link", linkInput.value.trim());
       }
       const r = await api.postForm("/submissions/capture", fd);
       if (r.ok) {
@@ -300,5 +340,10 @@ export function report() {
     ),
   );
 
-  return screen;
+  // Router calls cleanup on screen unmount. We stop the watcher we started
+  // at mount so it doesn't keep draining battery in the background. If the
+  // user navigates straight into a mission flow, mission screens call
+  // startWatchingPosition() themselves on mount (idempotent), so there's
+  // no gap in coverage where the GPS goes cold.
+  return { element: screen, cleanup: stopWatchingPosition };
 }

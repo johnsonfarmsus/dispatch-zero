@@ -231,9 +231,16 @@ async def test_approve_submission_is_idempotent(db_session, tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_reject_submission_flips_only_submission(
+async def test_reject_submission_deletes_orphan_place_and_snapshots_name(
     db_session, tmp_path, monkeypatch,
 ):
+    """Returning a submission now garbage-collects the orphan Place row
+    (it would otherwise sit forever as status=pending dead weight) while
+    keeping the Submission alive for the dossier history. The place name
+    is snapshot onto the Submission so the user's dossier card still
+    reads 'Sample' after the Place is gone. See migration 0015 + the
+    reject_submission service for the rationale.
+    """
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user = await _make_user(db_session, "Submitter")
     reviewer = await _make_user(db_session, "Reviewer")
@@ -241,17 +248,24 @@ async def test_reject_submission_flips_only_submission(
         db=db_session, user=user, raw_photo=_photo_with_gps(),
         name="Sample", category=PlaceCategory.MURAL, description=None, lat=47.4808, lng=-118.2547,
     )
+    place_id_before = submission.place_id
 
     rejected = await reject_submission(
         db=db_session, reviewer=reviewer, submission_id=submission.id,
+        note="Location inaccurate",
     )
     assert rejected.status == SubmissionStatus.RETURNED.value
-
-    # Place stays PENDING — it's a dead end for dispatch but the record persists.
+    # Submission survives with place_id=NULL (FK is SET NULL ondelete).
+    assert rejected.place_id is None
+    # Name snapshot lets the dossier card still render the place name.
+    assert rejected.place_name_snapshot == "Sample"
+    # Reviewer note persists for the submitter to read.
+    assert rejected.review_note == "Location inaccurate"
+    # Orphan Place row is hard-deleted.
     place = (await db_session.execute(
-        select(Place).where(Place.id == submission.place_id)
-    )).scalar_one()
-    assert place.status == PlaceStatus.PENDING.value
+        select(Place).where(Place.id == place_id_before)
+    )).scalar_one_or_none()
+    assert place is None
 
 
 @pytest.mark.asyncio

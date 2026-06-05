@@ -89,6 +89,29 @@ class Place(Base):
         String(140), nullable=True
     )
 
+    # When non-null, this place has already been published to OSM (as a
+    # node with this ID). Used by the admin queue to gray out the
+    # "Submit to OSM" button so we never push the same place twice.
+    # Stays NULL for places that came IN from OSM (we don't double-stamp
+    # them) and for places that haven't been pushed yet.
+    osm_published_node_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+
+    # Reviewer's Skip decision on this place as an OSM-publish candidate.
+    # When non-null, the place is filtered out of the completion-candidate
+    # queue forever (until someone clears it in the DB). osm_skipped_by_user_id
+    # records which admin made the call for audit. See
+    # services.osm_candidates.mark_skipped.
+    osm_skipped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    osm_skipped_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

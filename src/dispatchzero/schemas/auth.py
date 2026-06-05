@@ -40,3 +40,8 @@ class MeOut(BaseModel):
     # it leaves this count and either joins completions_count (approved) or
     # just lives on in the dossier (returned).
     pending_submissions: int = 0
+    # Drives whether the SPA renders the Admin link on the Settings screen
+    # and the admin queue route. The backend doesn't trust this flag — every
+    # /admin/* route re-checks via require_admin against the DB. This is
+    # only here for the UI to decide what to show.
+    is_admin: bool = False

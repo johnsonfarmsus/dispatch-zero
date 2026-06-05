@@ -86,7 +86,10 @@ async def test_broad_mode_returns_parks_and_peaks(redis_client):
         )
     by_cat = {r.category: r for r in results}
     assert PlaceCategory.VIEWPOINT in by_cat  # park OR peak
-    assert PlaceCategory.HISTORIC in by_cat  # place_of_worship
+    # place_of_worship now maps to CHURCH (was HISTORIC) — the broad-tier
+    # expansion split out churches as their own category rather than
+    # bundling them with castles/ruins/lighthouses.
+    assert PlaceCategory.CHURCH in by_cat  # place_of_worship
     # All three should be classified
     assert len(results) == 3
 
