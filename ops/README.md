@@ -1,4 +1,4 @@
-# dispatch-zero — operator runbook
+# dispatch-zero operator runbook
 
 Post-deploy steps + manual operations. Product spec is in
 `../dispatch-zero_project_document.md`; phase plans are in
@@ -8,8 +8,8 @@ Post-deploy steps + manual operations. Product spec is in
 
 ## Rate limits
 
-Tunable via env vars in `/opt/dispatchzero/.env` (defaults are sane —
-override only if you see legitimate caps biting):
+Tunable via env vars in `/opt/dispatchzero/.env`. Defaults are sane;
+override only if you see legitimate caps biting:
 
 ```
 RATE_LIMIT_MISSION_REQUEST_PER_DAY=50
@@ -69,7 +69,7 @@ ssh root@89.167.39.152 \
 If/when this becomes too manual, options for keeping things in-house:
 
 - Self-hosted **ntfy** (single Go binary, run `ntfy serve` on VPS 3
-  next to Mailcow) — same protocol, same phone app, your own server
+  next to Mailcow). Same protocol, same phone app, your own server
 - Self-hosted **GlitchTip** or **Bugsink** for error tracking with a
   dashboard, both Sentry-API compatible
 - A small cron + email script using your existing Mailcow on VPS 3
@@ -82,9 +82,9 @@ Pick when the scale demands it; not before.
 
 ## What's NOT shipped (intentional)
 
-- **Off-host backups** — Hetzner already takes VPS-level snapshots
-- **External uptime monitoring** — word-of-mouth at MVP scale
-- **Error tracking SaaS / push alerts** — see "Watching for problems" above
+- **Off-host backups.** Hetzner already takes VPS-level snapshots
+- **External uptime monitoring.** Word-of-mouth at MVP scale
+- **Error tracking SaaS / push alerts.** See "Watching for problems" above
 
 See `docs/plans/2026-04-27-phase-14-launch-hardening.md` for the
 context on each.

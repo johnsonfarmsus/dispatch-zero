@@ -1,12 +1,12 @@
 # Dispatch Zero
 
-Location-based adventure web app. Sends you on real-world missions to photograph nearby landmarks — murals, sculptures, memorials, historic buildings, churches, parks, post offices — framed as field assignments from a handler called Zero, in one of three selectable voices (pulp / spy-thriller / fantasy-ceremonial).
+Location-based adventure web app. Sends you on real-world missions to photograph nearby landmarks (murals, sculptures, memorials, historic buildings, churches, parks, post offices) framed as field assignments from a handler called Zero, in one of three selectable voices (pulp / spy-thriller / fantasy-ceremonial).
 
 Runs in your phone's browser. Add to home screen for a PWA install. No app store required.
 
 **Canonical instance:** <https://dispatchzero.ataary.com>
 
-This repository contains the full source under AGPL-3.0. You're welcome to run your own instance — see [Self-hosting](#self-hosting) below.
+This repository contains the full source under AGPL-3.0. You're welcome to run your own instance. See [Self-hosting](#self-hosting) below.
 
 ---
 
@@ -14,9 +14,9 @@ This repository contains the full source under AGPL-3.0. You're welcome to run y
 
 Dispatch Zero is a game built on open-source tools that contributes back to the open data it uses to power itself.
 
-The dispatch engine draws on [OpenStreetMap](https://www.openstreetmap.org) (via Overpass), [Wikipedia](https://en.wikipedia.org) geosearch, and Wikidata to find places near you. The briefing engine runs on [OLMo 2](https://allenai.org/olmo) — open weights, open training data, Apache-2.0. The whole stack is open: PostgreSQL/PostGIS, Redis, Python/FastAPI, Pillow, vanilla HTML/CSS/JS, Caddy. No proprietary dependencies, no analytics, no trackers.
+The dispatch engine draws on [OpenStreetMap](https://www.openstreetmap.org) (via Overpass), [Wikipedia](https://en.wikipedia.org) geosearch, and Wikidata to find places near you. The briefing engine runs on [OLMo 2](https://allenai.org/olmo): open weights, open training data, Apache-2.0. The whole stack is open: PostgreSQL/PostGIS, Redis, Python/FastAPI, Pillow, vanilla HTML/CSS/JS, Caddy. No proprietary dependencies, no analytics, no trackers.
 
-The round-trip closes the loop. When a player visits a place that *isn't* on OSM, they can report it from inside the game. The maintainer reviews each submission and pushes verified ones back to OSM as the bot account `DispatchZero` — with the original photo's GPS as the coordinates, the user-supplied description or Wikipedia link in the appropriate tags, and `source=survey;Dispatch Zero` provenance baked into every changeset. Every player walk becomes a potential improvement to the global commons that the game itself reads from.
+The round-trip closes the loop. When a player visits a place that *isn't* on OSM, they can report it from inside the game. The maintainer reviews each submission and pushes verified ones back to OSM as the bot account `DispatchZero`, with the original photo's GPS as the coordinates, the user-supplied description or Wikipedia link in the appropriate tags, and `source=survey;Dispatch Zero` provenance baked into every changeset. Every player walk becomes a potential improvement to the global commons that the game itself reads from.
 
 Same logic applies to mission completions of non-OSM places (Wikipedia-sourced, community-sourced). After a player on the ground verifies one with a photo, it surfaces in the maintainer's review queue as a publish candidate.
 
@@ -24,7 +24,7 @@ The license enforces the philosophy: AGPL-3.0 means any fork that runs as a netw
 
 ## How it works
 
-Sign up with a callsign and a password — no email, no name, no phone. Pick an organization (The Archive, The Agency, or The Guild — same character, different voice). Tap **Request Dispatch**. The system finds a real landmark near you, generates a fresh in-voice briefing, and sends you walking.
+Sign up with a callsign and a password. No email, no name, no phone. Pick an organization (The Archive, The Agency, or The Guild). Same character, different voice. Tap **Request Dispatch**. The system finds a real landmark near you, generates a fresh in-voice briefing, and sends you walking.
 
 When you're within 80 m of the target, the camera unlocks. You take a photo as proof. The app verifies the photo by GPS + EXIF freshness, composes a 4:5 shareable mission card, and adds the run to your dossier.
 
@@ -32,12 +32,12 @@ When you're within 80 m of the target, the camera unlocks. You take a photo as p
 
 Six-tier search, evaluated in order until at least one eligible candidate surfaces:
 
-1. **Caller radius, strict OSM** (typically 2 km) — Overpass for the art-first set: murals, sculptures, statues, monuments, memorials, historic buildings, viewpoints. These are what we want users to find *first*.
-2. **5 km strict OSM** — same art-first filters, wider radius.
-3. **5 km broad OSM** — adds the everyday-landmark layer: churches (`amenity=place_of_worship`), post offices, libraries, town halls, cemeteries, fountains, lighthouses, windmills, towers, peaks, waterfalls, parks. Liberal name-required filtering keeps the noise out.
-4. **5 km Wikipedia** — geosearch enriched with Wikidata. Catches encyclopedia-listed places OSM hasn't surfaced.
-5. **10 km broad OSM** — one wider OSM sweep before falling to local data. Catches semi-rural towns where the 5 km tiers came up empty.
-6. **10 km local DB** — community submissions approved through the in-game review queue. This is the closed-loop tier: places players reported, the maintainer approved, and that haven't yet been pushed upstream to OSM (or that the maintainer chose to keep local-only).
+1. **Caller radius, strict OSM** (typically 2 km). Overpass for the art-first set: murals, sculptures, statues, monuments, memorials, historic buildings, viewpoints. These are what we want users to find *first*.
+2. **5 km strict OSM.** Same art-first filters, wider radius.
+3. **5 km broad OSM.** Adds the everyday-landmark layer: churches (`amenity=place_of_worship`), post offices, libraries, town halls, cemeteries, fountains, lighthouses, windmills, towers, peaks, waterfalls, parks. Liberal name-required filtering keeps the noise out.
+4. **5 km Wikipedia.** Geosearch enriched with Wikidata. Catches encyclopedia-listed places OSM hasn't surfaced.
+5. **10 km broad OSM.** One wider OSM sweep before falling to local data. Catches semi-rural towns where the 5 km tiers came up empty.
+6. **10 km local DB.** Community submissions approved through the in-game review queue. This is the closed-loop tier: places players reported, the maintainer approved, and that haven't yet been pushed upstream to OSM (or that the maintainer chose to keep local-only).
 
 The strict-first bias preserves the game's character. A user in an art-rich town gets murals before they get a post office.
 
@@ -54,8 +54,8 @@ Any logged-in player can submit a point of interest from the in-game **Report** 
 In the queue, the maintainer sees:
 
 - The photo and place metadata.
-- A clickable OpenStreetMap link at zoom 19 — the ground-truth verification tool.
-- An **OSM pre-flight check** badge: a background Overpass query runs after every submission to look for nearby OSM nodes at the same category, surfacing matches with distance + clickable links. Advisory only — never blocks an action.
+- A clickable OpenStreetMap link at zoom 19. This is the ground-truth verification tool.
+- An **OSM pre-flight check** badge: a background Overpass query runs after every submission to look for nearby OSM nodes at the same category, surfacing matches with distance + clickable links. Advisory only. Never blocks an action.
 - Submitter callsign + adventure-style for context.
 - Three actions: **Approve** (place becomes active locally), **Submit to OSM** (publish a node to OSM as the DispatchZero bot account and stamp it active locally), **Return** (with an optional note that shows up on the submitter's dossier card).
 
@@ -66,8 +66,8 @@ OSM publishing safety:
 - **Connect-once OAuth 2.0** flow with token refresh. The maintainer's bot account credentials live in a single-row table; the per-request flow never re-prompts.
 - **Dry-run mode** (env-toggled) builds the changeset XML and logs it but doesn't POST. Lets the maintainer verify the round-trip end-to-end before any real edit lands.
 - **Daily cap** on real publishes (default 5/day) keeps the bot from looking like a bulk-import operation OSM admins would flag.
-- **Dedup** on `places.osm_published_node_id` — the same place can't be pushed twice, even across re-submissions.
-- **Subtype picker** for ambiguous categories (`historic`, `infrastructure`) — the maintainer picks the specific OSM tag bundle (bridge / tower / dam / etc.) before the publish runs.
+- **Dedup** on `places.osm_published_node_id`. The same place can't be pushed twice, even across re-submissions.
+- **Subtype picker** for ambiguous categories (`historic`, `infrastructure`). The maintainer picks the specific OSM tag bundle (bridge / tower / dam / etc.) before the publish runs.
 - Every changeset includes `source=survey;Dispatch Zero` and `created_by=Dispatch Zero/0.1` so OSM mappers can identify our edits at a glance.
 
 The full audit trail (every dry-run XML payload + every real publish's changeset/node IDs + which admin approved it) lives in the `osm_publications` table.
@@ -76,8 +76,8 @@ The full audit trail (every dry-run XML payload + every real publish's changeset
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2
 - **Data:** PostgreSQL + PostGIS, Redis (rate limiting + ephemeral state)
-- **Geo data sources:** OpenStreetMap (via Overpass — read AND write through the bot account), Wikipedia geosearch + Wikidata
-- **AI:** [Ollama](https://ollama.com) running [OLMo 2](https://allenai.org/olmo) 13B by default. Any OpenAI-compatible chat endpoint works — Ollama Cloud (paid, `gemma4:31b-cloud`) is documented as an alternative for fork users without local GPU resources. The canonical instance runs Ollama on a separate inference box reached over Tailscale.
+- **Geo data sources:** OpenStreetMap (via Overpass, read AND write through the bot account), Wikipedia geosearch + Wikidata
+- **AI:** [Ollama](https://ollama.com) running [OLMo 2](https://allenai.org/olmo) 13B by default. Any OpenAI-compatible chat endpoint works. Ollama Cloud (paid, `gemma4:31b-cloud`) is documented as an alternative for fork users without local GPU resources. The canonical instance runs Ollama on a separate inference box reached over Tailscale.
 - **OSM integration:** OAuth 2.0 bot account, Overpass for reads, OSM Editing API 0.6 for writes (changeset + osmChange XML)
 - **Image:** Pillow for thumbnails, EXIF stripping, mission-card composition, and contribution-card status stamping
 - **Frontend:** Vanilla HTML/CSS/JS, no SPA framework; installable as a PWA
@@ -91,14 +91,14 @@ The full audit trail (every dry-run XML payload + every real publish's changeset
 You need a working Ollama on your host machine with `olmo2:13b` pulled. ~15 minutes one-time setup:
 
 ```bash
-# Install Ollama — see https://ollama.com/download for your OS
+# Install Ollama. See https://ollama.com/download for your OS
 # (macOS Homebrew):
 brew install ollama
 
 # Pull the model (~8 GB)
 ollama pull olmo2:13b
 
-# Ollama auto-starts as a service after install — verify:
+# Ollama auto-starts as a service after install. Verify:
 ollama list
 ```
 
@@ -134,18 +134,18 @@ Open `.env`, comment the four `OLLAMA_*` lines under the default block, and unco
 
 To run the round-trip (publish approved submissions back to OSM), you need an OSM account and an OAuth 2.0 application:
 
-1. Create a dedicated OSM account for the bot (recommended over your personal account — keeps reputation siloed). Verify the email.
+1. Create a dedicated OSM account for the bot (recommended over your personal account, which keeps reputation siloed). Verify the email.
 2. Register an OAuth 2.0 application at <https://www.openstreetmap.org/oauth2/applications/new>:
    - **Redirect URI:** `https://YOUR-DOMAIN/admin/osm/callback`
    - **Confidential application:** yes
-   - **Permissions:** `Read user preferences` + `Modify the map` only. Skip the rest — over-scoped apps draw OSM admin scrutiny.
+   - **Permissions:** `Read user preferences` + `Modify the map` only. Skip the rest. Over-scoped apps draw OSM admin scrutiny.
 3. OSM gives you a Client ID and Client Secret. Drop them into your instance's `.env`:
    ```
    OSM_CLIENT_ID=...
    OSM_CLIENT_SECRET=...
    OSM_DRY_RUN=true
    ```
-4. Restart the app. In the in-game Settings, the admin (a user flipped to `is_admin=true` via the CLI) gets an "Admin" link. The review queue shows a `Connect OSM` prompt — click it, authorize, return.
+4. Restart the app. In the in-game Settings, the admin (a user flipped to `is_admin=true` via the CLI) gets an "Admin" link. The review queue shows a `Connect OSM` prompt. Click it, authorize, return.
 5. With `OSM_DRY_RUN=true`, the publish path builds the changeset XML and logs it but skips the HTTP call to OSM. Eyeball a few dry-run outputs in the app logs before flipping `OSM_DRY_RUN=false` and going live.
 
 To promote a user to admin:
@@ -164,7 +164,7 @@ cp deploy/.env.local.example deploy/.env.local
 ./deploy/deploy.sh
 ```
 
-This rsyncs the source to your VPS (with `--exclude 'uploads'` to protect captured user photos — see the comment block in `deploy/deploy.sh` for *why* this matters) and runs `docker compose up -d --build` over SSH.
+This rsyncs the source to your VPS (with `--exclude 'uploads'` to protect captured user photos; see the comment block in `deploy/deploy.sh` for *why* this matters) and runs `docker compose up -d --build` over SSH.
 
 You'll need:
 
@@ -186,9 +186,9 @@ docker compose exec app python -m dispatchzero.tools.import_gnis \
     --categories church,cemetery,park,falls,trail,dam,bridge,tower,post_office
 ```
 
-The canonical instance ran this for the entire state of Washington at one point — ~6,700 places — then retired the import after the broad-tier OSM expansion absorbed equivalent coverage with better tag quality. The importer is kept around because the trade-off may go the other way for your area: places OSM doesn't have yet but GNIS does, especially in the western US where GNIS is dense.
+The canonical instance ran this for the entire state of Washington at one point (about 6,700 places), then retired the import after the broad-tier OSM expansion absorbed equivalent coverage with better tag quality. The importer is kept around because the trade-off may go the other way for your area: places OSM doesn't have yet but GNIS does, especially in the western US where GNIS is dense.
 
-**Note:** USGS removed cultural feature classes from the active GNIS dataset in 2021. For those classes you need a pre-2021 snapshot — the Internet Archive has them: <https://web.archive.org/web/2020*/https://geonames.usgs.gov/docs/stategaz/>
+**Note:** USGS removed cultural feature classes from the active GNIS dataset in 2021. For those classes you need a pre-2021 snapshot. The Internet Archive has them: <https://web.archive.org/web/2020*/https://geonames.usgs.gov/docs/stategaz/>
 
 ## Privacy & data model
 
@@ -200,7 +200,7 @@ Dispatch Zero is built with a deliberately small data footprint. Full statement 
 - **Sharing** is opt-in. Share URLs use unguessable tokens; no public index. Both mission completions and approved community submissions can be shared.
 - **What leaves your network:** briefing text → your configured AI endpoint (your local Ollama by default, never leaves your machine); geodata lookups → OpenStreetMap, Wikipedia, Wikidata; OSM publications (only when an admin approves them) → OSM Editing API as the configured bot account. Nothing else.
 
-If you self-host with local Ollama, the entire briefing pipeline stays inside your network. The geo lookups (read) and OSM publications (write) are inherently networked — they're the round-trip.
+If you self-host with local Ollama, the entire briefing pipeline stays inside your network. The geo lookups (read) and OSM publications (write) are inherently networked. They're the round-trip.
 
 ## Contributing
 
@@ -218,6 +218,6 @@ The pre-commit hook blocks commits to `deploy/*.sh` that would re-introduce a da
 
 [GNU Affero General Public License v3.0](LICENSE).
 
-In plain English: you're free to use, modify, and redistribute this code. If you run a modified version as a network service, you must make the modified source available to your users. This is intentional — it keeps the project, and any derivatives, in the public commons.
+In plain English: you're free to use, modify, and redistribute this code. If you run a modified version as a network service, you must make the modified source available to your users. This is intentional. It keeps the project, and any derivatives, in the public commons.
 
 If you'd like to discuss a use case the AGPL doesn't cleanly cover, open an issue.

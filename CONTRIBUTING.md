@@ -1,6 +1,6 @@
 # Contributing to Dispatch Zero
 
-Thanks for your interest. This project is maintained as a hobby — that shapes a few expectations on both sides.
+Thanks for your interest. This project is maintained as a hobby, which shapes a few expectations on both sides.
 
 ## Bug reports
 
@@ -14,7 +14,7 @@ If you can paste a relevant snippet of the server log (`docker compose logs app`
 
 ## Pull requests
 
-PRs welcome — with a couple of caveats:
+PRs welcome, with a couple of caveats:
 
 - **For anything substantive (new feature, architectural change, new external dependency), open an issue or draft PR first.** Saves both of us from you doing work that doesn't land.
 - **Keep the test suite green.** `pytest` should pass before you push. If you're adding behavior, add a test.
@@ -73,4 +73,4 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test py
 
 ## Code of conduct
 
-Be decent. Disagree about technical choices, not about people. Concrete behavior is covered by the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) — that's the baseline expectation here, even though we don't ship a separate file for it.
+Be decent. Disagree about technical choices, not about people. Concrete behavior is covered by the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). That is the baseline expectation here, even though we don't ship a separate file for it.
