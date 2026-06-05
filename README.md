@@ -16,7 +16,7 @@ Dispatch Zero is a game built on open-source tools that contributes back to the 
 
 The dispatch engine draws on [OpenStreetMap](https://www.openstreetmap.org) (via Overpass), [Wikipedia](https://en.wikipedia.org) geosearch, and Wikidata to find places near you. The briefing engine runs on [OLMo 2](https://allenai.org/olmo): open weights, open training data, Apache-2.0. The whole stack is open: PostgreSQL/PostGIS, Redis, Python/FastAPI, Pillow, vanilla HTML/CSS/JS, Caddy. No proprietary dependencies, no analytics, no trackers.
 
-The round-trip closes the loop. When a player visits a place that *isn't* on OSM, they can report it from inside the game. The maintainer reviews each submission and pushes verified ones back to OSM as the bot account `DispatchZero`, with the original photo's GPS as the coordinates, the user-supplied description or Wikipedia link in the appropriate tags, and `source=survey;Dispatch Zero` provenance baked into every changeset. Every player walk becomes a potential improvement to the global commons that the game itself reads from.
+The round-trip closes the loop. When a player visits a place that *isn't* on OSM, they can report it from inside the game. The maintainer reviews each submission and pushes verified ones back to OSM under a dedicated project account, `DispatchZero`, with the original photo's GPS as the coordinates, the user-supplied description or Wikipedia link in the appropriate tags, and `source=survey;Dispatch Zero` provenance baked into every changeset. Every edit has a human on both ends: a player who visited the place and the maintainer who reviewed the submission. The only mechanized step is the OSM API call itself. Every player walk becomes a potential improvement to the global commons that the game itself reads from.
 
 Same logic applies to mission completions of non-OSM places (Wikipedia-sourced, community-sourced). After a player on the ground verifies one with a photo, it surfaces in the maintainer's review queue as a publish candidate.
 
@@ -57,15 +57,15 @@ In the queue, the maintainer sees:
 - A clickable OpenStreetMap link at zoom 19. This is the ground-truth verification tool.
 - An **OSM pre-flight check** badge: a background Overpass query runs after every submission to look for nearby OSM nodes at the same category, surfacing matches with distance + clickable links. Advisory only. Never blocks an action.
 - Submitter callsign + adventure-style for context.
-- Three actions: **Approve** (place becomes active locally), **Submit to OSM** (publish a node to OSM as the DispatchZero bot account and stamp it active locally), **Return** (with an optional note that shows up on the submitter's dossier card).
+- Three actions: **Approve** (place becomes active locally), **Submit to OSM** (publish a node to OSM under the DispatchZero project account and stamp it active locally), **Return** (with an optional note that shows up on the submitter's dossier card).
 
 Mission completions at places that *didn't* come from OSM (Wikipedia, community, internal) also surface as **publish candidates** in the same queue, with a `WIKIPEDIA` / `COMMUNITY` source badge. Actions are **Submit to OSM** or **Skip**. Wikipedia-sourced candidates auto-derive the `wikipedia=` tag from the article title at publish time.
 
 OSM publishing safety:
 
-- **Connect-once OAuth 2.0** flow with token refresh. The maintainer's bot account credentials live in a single-row table; the per-request flow never re-prompts.
+- **Connect-once OAuth 2.0** flow with token refresh. The maintainer's OSM account credentials live in a single-row table; the per-request flow never re-prompts.
 - **Dry-run mode** (env-toggled) builds the changeset XML and logs it but doesn't POST. Lets the maintainer verify the round-trip end-to-end before any real edit lands.
-- **Daily cap** on real publishes (default 5/day) keeps the bot from looking like a bulk-import operation OSM admins would flag.
+- **Daily cap** on real publishes (default 5/day) keeps the publishing pace well below anything that resembles a bulk-import operation OSM admins would flag.
 - **Dedup** on `places.osm_published_node_id`. The same place can't be pushed twice, even across re-submissions.
 - **Subtype picker** for ambiguous categories (`historic`, `infrastructure`). The maintainer picks the specific OSM tag bundle (bridge / tower / dam / etc.) before the publish runs.
 - Every changeset includes `source=survey;Dispatch Zero` and `created_by=Dispatch Zero/0.1` so OSM mappers can identify our edits at a glance.
@@ -76,9 +76,9 @@ The full audit trail (every dry-run XML payload + every real publish's changeset
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2
 - **Data:** PostgreSQL + PostGIS, Redis (rate limiting + ephemeral state)
-- **Geo data sources:** OpenStreetMap (via Overpass, read AND write through the bot account), Wikipedia geosearch + Wikidata
+- **Geo data sources:** OpenStreetMap (via Overpass, read AND write through the project's OSM account), Wikipedia geosearch + Wikidata
 - **AI:** [Ollama](https://ollama.com) running [OLMo 2](https://allenai.org/olmo) 13B by default. Any OpenAI-compatible chat endpoint works. Ollama Cloud (paid, `gemma4:31b-cloud`) is documented as an alternative for fork users without local GPU resources. The canonical instance runs Ollama on a separate inference box reached over Tailscale.
-- **OSM integration:** OAuth 2.0 bot account, Overpass for reads, OSM Editing API 0.6 for writes (changeset + osmChange XML)
+- **OSM integration:** OAuth 2.0 against a dedicated project account, Overpass for reads, OSM Editing API 0.6 for writes (changeset + osmChange XML)
 - **Image:** Pillow for thumbnails, EXIF stripping, mission-card composition, and contribution-card status stamping
 - **Frontend:** Vanilla HTML/CSS/JS, no SPA framework; installable as a PWA
 - **Reverse proxy:** Caddy (auto-HTTPS via Let's Encrypt)
@@ -130,11 +130,11 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test py
 
 Open `.env`, comment the four `OLLAMA_*` lines under the default block, and uncomment the four under "Alternative: Ollama Cloud". Get an API key at <https://ollama.com>. Briefings will route to `gemma4:31b-cloud` over the hosted endpoint instead of your local Ollama. No other changes needed; the rest of the stack is identical.
 
-### OSM bot account (for the round-trip)
+### OSM account setup (for the round-trip)
 
 To run the round-trip (publish approved submissions back to OSM), you need an OSM account and an OAuth 2.0 application:
 
-1. Create a dedicated OSM account for the bot (recommended over your personal account, which keeps reputation siloed). Verify the email.
+1. Create a dedicated OSM account for the project (recommended over your personal account, which keeps reputation siloed). Verify the email.
 2. Register an OAuth 2.0 application at <https://www.openstreetmap.org/oauth2/applications/new>:
    - **Redirect URI:** `https://YOUR-DOMAIN/admin/osm/callback`
    - **Confidential application:** yes
@@ -198,7 +198,7 @@ Dispatch Zero is built with a deliberately small data footprint. Full statement 
 - **One cookie**, signed, used only for session. No analytics, no trackers, no ad network.
 - **Location** is read only when you request a dispatch, use the compass, capture a photo, or submit a community POI. Not retained as history.
 - **Sharing** is opt-in. Share URLs use unguessable tokens; no public index. Both mission completions and approved community submissions can be shared.
-- **What leaves your network:** briefing text → your configured AI endpoint (your local Ollama by default, never leaves your machine); geodata lookups → OpenStreetMap, Wikipedia, Wikidata; OSM publications (only when an admin approves them) → OSM Editing API as the configured bot account. Nothing else.
+- **What leaves your network:** briefing text → your configured AI endpoint (your local Ollama by default, never leaves your machine); geodata lookups → OpenStreetMap, Wikipedia, Wikidata; OSM publications (only when an admin approves them) → OSM Editing API as the configured project account. Nothing else.
 
 If you self-host with local Ollama, the entire briefing pipeline stays inside your network. The geo lookups (read) and OSM publications (write) are inherently networked. They're the round-trip.
 
