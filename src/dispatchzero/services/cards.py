@@ -427,6 +427,7 @@ def compose_contribution_card(
     adventure_style: str,
     status,                 # SubmissionStatus, accepted as enum or str
     output_path: Path,
+    submitter_rank_name: str | None = None,
 ) -> None:
     """Compose the trading-card-style contribution JPEG and save it.
 
@@ -512,15 +513,20 @@ def compose_contribution_card(
     )
     col_y += sh + 16
 
-    # The submitter's callsign + a SUBMITTER label.
+    # The submitter's callsign + their rank. Both bumped up in size so the
+    # card reads cleanly when shared on social media — this is the
+    # show-off block. Callsign at 34 (was 26), rank at 22 (was an 18-point
+    # "SUBMITTER" label). When no rank was passed (older call sites or
+    # missing data) we fall back to the original "SUBMITTER" wording so the
+    # card still composes.
     draw.text(
         (col_x, col_y), callsign_upper,
-        font=_font(_FONT_BOLD, 26), fill=_TEXT,
+        font=_font(_FONT_BOLD, 34), fill=_TEXT,
     )
-    col_y += 36
+    col_y += 44
     draw.text(
-        (col_x, col_y), "SUBMITTER",
-        font=_font(_FONT_REGULAR, 18), fill=_TEXT_FAINT,
+        (col_x, col_y), (submitter_rank_name or "Submitter").upper(),
+        font=_font(_FONT_BOLD, 22), fill=accent,
     )
 
     # Photo on the right

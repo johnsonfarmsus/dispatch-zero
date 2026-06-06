@@ -6,12 +6,10 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { navigate } from "../router.js";
 
-const _STATUS_LABEL = {
-  pending: "Awaiting review",
-  approved: "Verified",
-  returned: "Returned",
-};
-
+// Card image carries its own status stamp (PENDING / VERIFIED / RETURNED)
+// baked into the JPEG, so we don't render a separate status label on this
+// screen anymore. The blurb below the card still differs by status to
+// give the submitter the right next-step framing.
 const _STATUS_BLURB = {
   pending: (
     "The submission has been received. The Archive will review and re-stamp " +
@@ -40,8 +38,11 @@ export async function submissionDetail({ id }) {
     );
   }
   const submission = r.data;
-  const code = String(submission.id).slice(0, 8).toUpperCase();
-  const statusLabel = _STATUS_LABEL[submission.status] || submission.status;
+  // No header on this screen anymore. The card image itself carries the
+  // wordmark, callsign, status stamp, place name, and date, so the screen
+  // chrome was duplicating signal that the artifact already provides.
+  // Card-only layout reads cleaner end to end, especially when the user
+  // is sharing.
   const statusBlurb = _STATUS_BLURB[submission.status] || "";
 
   // The card is composed server-side with a status stamp baked in, so we
@@ -77,14 +78,7 @@ export async function submissionDetail({ id }) {
   });
 
   const screen = el("div", { class: "screen" },
-    el("div", { class: "header" },
-      el("span", {}, "// dispatch zero //"),
-      el("span", { class: "muted" }, statusLabel),
-    ),
     el("div", { class: "content stack", style: { alignItems: "center" } },
-      el("div", { class: "subtitle" }, "FILE NUMBER"),
-      el("div", { class: "code", style: { fontSize: "var(--t-lg)", letterSpacing: "0.12em" } },
-        code),
       cardImg,
       el("p", {
         style: {

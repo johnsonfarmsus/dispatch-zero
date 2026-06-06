@@ -46,7 +46,9 @@ from dispatchzero.models import (
     User,
 )
 from dispatchzero.services.cards import compose_contribution_card
+from dispatchzero.services.mission_flow import user_completions_count
 from dispatchzero.services.photo import save_thumbnail
+from dispatchzero.services.rank import completions_to_rank, rank_name
 
 log = logging.getLogger(__name__)
 
@@ -182,6 +184,13 @@ async def create_submission(
     submission.photo_url = str(photo_path)
 
     card_path = Path(settings.photo_upload_dir) / "submission_cards" / f"{submission.id}.jpg"
+    # Rank reflects the submitter's current standing at compose time. The
+    # mission card uses snapshot-at-completion stats; for contribution
+    # cards we keep it simpler (rank as of right now) since the card
+    # re-stamps on every status change anyway. completions_count is the
+    # same value that drives /auth/me's rank.
+    completions = await user_completions_count(db, user_id=user.id)
+    rank_label = rank_name(user.adventure_style, completions_to_rank(completions))
     try:
         compose_contribution_card(
             photo_path=photo_path,
@@ -191,6 +200,7 @@ async def create_submission(
             adventure_style=user.adventure_style,
             status=SubmissionStatus.PENDING,
             output_path=card_path,
+            submitter_rank_name=rank_label,
         )
         submission.card_path = str(card_path)
     except Exception:  # noqa: BLE001
@@ -226,7 +236,7 @@ async def approve_submission(
     )
 
     submitter = await _load_user(db, submission.user_id)
-    await _restamp_card(submission, place, submitter, SubmissionStatus.APPROVED)
+    await _restamp_card(db, submission, place, submitter, SubmissionStatus.APPROVED)
 
     await db.commit()
     await db.refresh(submission)
@@ -276,7 +286,7 @@ async def reject_submission(
     # Re-stamp the card before we delete the Place, because _restamp_card
     # reads place.name. After this returns, the JPEG on disk is independent
     # of the DB row, so deleting the Place doesn't break the artifact.
-    await _restamp_card(submission, place, submitter, SubmissionStatus.RETURNED)
+    await _restamp_card(db, submission, place, submitter, SubmissionStatus.RETURNED)
 
     # Delete the orphan Place. The Submission's FK (place_id) is SET NULL
     # ondelete, so submission.place_id becomes NULL as part of the same
@@ -313,6 +323,7 @@ async def _load(
 
 
 async def _restamp_card(
+    db: AsyncSession,
     submission: Submission,
     place: Place,
     submitter: User,
@@ -321,11 +332,21 @@ async def _restamp_card(
     """Re-render the contribution card with the new status stamp.
 
     Failure is logged but doesn't bubble — the submission state change still
-    lands. The user just keeps seeing the old (PENDING) card."""
+    lands. The user just keeps seeing the old (PENDING) card.
+
+    Pulls the submitter's CURRENT rank (not the rank at submission time) so
+    a re-stamp on approval picks up any rank growth since the submission.
+    Slight philosophical mismatch with mission cards' snapshot-at-completion
+    posture, but the contribution card already updates its status stamp on
+    each transition, so it's not strictly a frozen-in-time artifact anyway."""
     if submission.card_path is None or not submission.photo_url:
         return
     output_path = Path(submission.card_path)
     photo_path = Path(submission.photo_url)
+    completions = await user_completions_count(db, user_id=submitter.id)
+    rank_label = rank_name(
+        submitter.adventure_style, completions_to_rank(completions),
+    )
     try:
         compose_contribution_card(
             photo_path=photo_path,
@@ -335,6 +356,7 @@ async def _restamp_card(
             adventure_style=submitter.adventure_style,
             status=status,
             output_path=output_path,
+            submitter_rank_name=rank_label,
         )
     except Exception:  # noqa: BLE001
         log.exception("contribution-card restamp failed for submission %s", submission.id)
