@@ -22,3 +22,9 @@ caddy_config/
 
 # Blog drafts (not part of the codebase)
 blog/
+
+# Local-only developer tooling. Kept on disk for ad-hoc model comparison
+# and other one-off experiments; intentionally not part of the shipped
+# project. Specific files so anything we *do* want to ship from
+# src/dispatchzero/tools/ still gets tracked.
+src/dispatchzero/tools/compare_briefings.py
