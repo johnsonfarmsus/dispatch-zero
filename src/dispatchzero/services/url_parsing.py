@@ -24,6 +24,18 @@ _WIKI_HOST = re.compile(r"^(?:([a-z-]{2,16})\.)?wikipedia\.org$", re.IGNORECASE)
 # wikipedia= tag values on OSM.
 _WIKI_PATH = re.compile(r"^/wiki/([^/?#]+)$")
 
+# Non-mainspace namespace prefixes. A "/wiki/<title>" whose title begins
+# with one of these (case-insensitively) followed by a colon is a Special
+# page, talk page, category, etc. — not an article — and must NOT become a
+# wikipedia= tag. We check a known prefix list rather than "any colon"
+# because legitimate mainspace article titles can contain colons
+# (e.g. "Dune: Part Two").
+_WIKI_NAMESPACE_PREFIXES = (
+    "special", "talk", "user", "wikipedia", "file", "mediawiki",
+    "template", "help", "category", "portal", "draft", "timedtext",
+    "module", "media", "book",
+)
+
 
 def parse_wikipedia_link(url: str) -> tuple[str, str] | None:
     """Return (lang, article_title) for a valid Wikipedia article URL,
@@ -55,6 +67,10 @@ def parse_wikipedia_link(url: str) -> tuple[str, str] | None:
     # spaces. Also URL-decode for things like %27 (apostrophes).
     title = unquote(path_match.group(1)).replace("_", " ")
     if not title:
+        return None
+    # Reject non-article namespaces (Special:, Talk:, Category:, etc.).
+    prefix, sep, _rest = title.partition(":")
+    if sep and prefix.strip().lower() in _WIKI_NAMESPACE_PREFIXES:
         return None
     return lang, title
 

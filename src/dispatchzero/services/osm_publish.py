@@ -151,21 +151,17 @@ async def publish_place_to_osm(
         comes only from the place itself (wikipedia= auto-derived for
         wp osm_type); the publication row's submission_id stays NULL.
 
+    The caller is expected to have already approved the submission (for
+    the submission path) or confirmed the place is dispatch-active (for
+    the candidate path) before calling this. Raises OsmPublishError on
+    any failure (cap, missing tags, OAuth, HTTP); the caller decides
+    whether to surface it or fall back to "approved but not published."
+
     Returns the OsmPublication row recording what happened. Raises
     OsmPublishError on any failure (cap, missing tags, OAuth, HTTP).
     See publish_submission_to_osm for the submission-flavored wrapper
     kept for back-compat.
     """
-    """Publish (or dry-publish) one approved submission to OSM as a node.
-
-    Caller already invoked approve_submission separately; this function
-    just handles the OSM side. Raises OsmPublishError on any failure
-    (cap, missing tags, OAuth, HTTP). The caller decides whether to
-    surface the error to the admin or fall back to "approved but not
-    published."
-
-    Returns the OsmPublication row recording what happened (or what
-    would have happened, in dry-run mode)."""
     # ---- duplicate guard ----
     # Never publish the same place twice. Two redundant checks: the
     # cheap one (places.osm_published_node_id stamped earlier) and the
@@ -299,17 +295,23 @@ async def publish_place_to_osm(
             # 404 happens if the changeset already auto-closed; not an error.
             log.warning("OSM changeset close non-200: %s %s", r.status_code, r.text)
 
-    # Stamp the Place with the assigned OSM node ID. This is the fast
-    # dedup check the admin queue uses to disable Submit-to-OSM on
-    # already-published places.
+    # Stamp the Place with the assigned OSM node ID (the fast dedup check
+    # the admin queue uses to disable Submit-to-OSM on already-published
+    # places) AND write the audit row in a SINGLE transaction. Splitting
+    # these across two commits risked an inconsistent state: a Place
+    # marked "on OSM" with no osm_publications row, which under-counts the
+    # daily cap and leaves a hole in the audit trail. We've already
+    # mutated OSM by this point, so atomicity here matters most.
     if node_id is not None:
         place.osm_published_node_id = node_id
-        await db.commit()
-        await db.refresh(place)
 
     return await _record_publication(
         db,
-        submission_id=submission.id,
+        # submission may be None on the completion-candidate publish path
+        # (POST /admin/places/{id}/publish-osm). The dry-run branch already
+        # guards this; the live branch must too, or it AttributeErrors
+        # AFTER the OSM node is created and the changeset closed.
+        submission_id=(submission.id if submission else None),
         place_id=place.id,
         changeset_id=changeset_id,
         node_id=node_id,
@@ -350,7 +352,7 @@ async def publish_submission_to_osm(
 async def _record_publication(
     db: AsyncSession,
     *,
-    submission_id: uuid.UUID,
+    submission_id: uuid.UUID | None,
     place_id: uuid.UUID | None,
     changeset_id: int | None,
     node_id: int | None,
