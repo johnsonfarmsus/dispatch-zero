@@ -62,6 +62,11 @@ class SubmissionOut(BaseModel):
     # submitter's dossier card. None for pending / approved submissions
     # and for returned ones where the reviewer didn't leave a note.
     review_note: str | None = None
+    # Set once this submission's place has been published to OpenStreetMap.
+    # The submitter sees a "Now on OpenStreetMap" moment + a link to their
+    # live node. This is the round-trip's payoff surfaced to the person who
+    # earned it. None until/unless a real (non-dry-run) publish landed.
+    osm_node_id: int | None = None
 
 
 class SubmissionListItem(BaseModel):
@@ -79,7 +84,7 @@ class SubmissionListItem(BaseModel):
     review_note: str | None = None
 
 
-def _submission_to_out(s: Submission) -> SubmissionOut:
+def _submission_to_out(s: Submission, *, osm_node_id: int | None = None) -> SubmissionOut:
     return SubmissionOut(
         id=s.id,
         place_id=s.place_id,
@@ -89,7 +94,29 @@ def _submission_to_out(s: Submission) -> SubmissionOut:
         share_token=s.share_token,
         submitted_at=s.submitted_at.isoformat(),
         review_note=s.review_note,
+        osm_node_id=osm_node_id,
     )
+
+
+async def _osm_node_id_for_submission(
+    db: AsyncSession, submission_id: uuid.UUID,
+) -> int | None:
+    """The OSM node id this submission was published as, if any. Reads the
+    audit log for a real (non-dry-run) publication with a node id. None
+    when the submission was never published, or only dry-run published."""
+    from dispatchzero.models import OsmPublication
+    return (
+        await db.execute(
+            select(OsmPublication.node_id)
+            .where(
+                OsmPublication.submission_id == submission_id,
+                OsmPublication.dry_run.is_(False),
+                OsmPublication.node_id.is_not(None),
+            )
+            .order_by(OsmPublication.published_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 _CATEGORY_VALUES = Literal[
@@ -229,7 +256,8 @@ async def get_submission(
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> SubmissionOut:
     submission = await _load_visible(db, submission_id, user)
-    return _submission_to_out(submission)
+    node_id = await _osm_node_id_for_submission(db, submission.id)
+    return _submission_to_out(submission, osm_node_id=node_id)
 
 
 @router.get("/{submission_id}/photo.jpg")

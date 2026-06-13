@@ -41,6 +41,44 @@ ssh root@89.167.39.152 \
 
 ---
 
+## Health checks
+
+Two endpoints:
+
+- `GET /healthz` — shallow liveness (the process is up). Used by the
+  deploy script's post-start check.
+- `GET /healthz/deep` — readiness: pings Postgres + Redis with short
+  timeouts. Returns 503 with a per-component breakdown if any hard
+  dependency is down. (Ollama is intentionally NOT pinged — a cold model
+  would flap the check and the app degrades gracefully when it's slow.)
+
+A 5-line cron can turn `/healthz/deep` into alerting via the existing
+Mailcow on VPS 3:
+
+```bash
+# crontab on VPS 3
+*/5 * * * * curl -fsS https://dispatchzero.ataary.com/healthz/deep > /dev/null \
+  || echo "Dispatch Zero deep healthcheck FAILED at $(date -u)" \
+     | mail -s "DZ health alert" trevor@johnsonfarms.us
+```
+
+## Backups
+
+`deploy/backup.sh` writes a `pg_dump` (custom format, restorable with
+`pg_restore`) + an `uploads/` tarball to `/opt/dispatchzero-backups`,
+keeping the last 14 sets. This complements Hetzner's whole-VM snapshots
+(which don't protect against a bad migration or a logical DELETE) and
+stays fully in-house.
+
+```bash
+# crontab on VPS 2
+0 3 * * * /opt/dispatchzero/deploy/backup.sh >> /var/log/dz-backup.log 2>&1
+```
+
+Restore (manual; see the script footer for exact commands):
+- DB: `pg_restore -U <user> -d <db> --clean < db-<stamp>.dump`
+- uploads: `tar -xzf uploads-<stamp>.tar.gz -C /opt/dispatchzero`
+
 ## Watching for problems (manual, no alerting shipped)
 
 Phase 14 deliberately does NOT include a push-alert system. To check

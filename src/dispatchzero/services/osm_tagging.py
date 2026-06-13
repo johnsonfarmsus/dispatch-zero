@@ -16,9 +16,13 @@ References:
 The conservative posture: only publish tags we're confident are correct.
 Anything ambiguous bubbles up to the reviewer as a picker before publish.
 """
+import re
 from datetime import datetime, timezone
 
 from dispatchzero.services.url_parsing import normalize_url, parse_wikipedia_link
+
+# OSM wikidata= values are a Q followed by digits.
+_WIKIDATA_QID_RE = re.compile(r"^Q[0-9]+$")
 
 
 # Categories that resolve to one tag bundle. The reviewer just clicks
@@ -153,6 +157,7 @@ def tags_for_publish(
     picker_choice: str | None = None,
     external_link: str | None = None,
     place_osm_type: str | None = None,
+    wikidata_id: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, str] | None:
     """Return the full tag dict we'll send to OSM, or None if we can't
@@ -223,6 +228,12 @@ def tags_for_publish(
         )
         if auto:
             tags["wikipedia"] = auto
+    # wikidata= is the strongest semantic link in OSM (stable across article
+    # renames) and the tag mappers most want. Resolved by the caller from
+    # the place's Wikipedia title at publish time. Only attach a well-formed
+    # Q-id (Q followed by digits) so a malformed value never ships.
+    if wikidata_id and _WIKIDATA_QID_RE.match(wikidata_id):
+        tags["wikidata"] = wikidata_id
     # Common provenance metadata — OSM mappers can identify Dispatch Zero
     # nodes at a glance, and source=survey signals on-the-ground
     # verification (which is true: every submission is GPS-stamped at

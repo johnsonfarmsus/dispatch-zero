@@ -101,6 +101,39 @@ export async function submissionDetail({ id }) {
             },
           }, `"${submission.review_note}"`)
         : null,
+      // "Now on OpenStreetMap" — the round-trip payoff for the submitter.
+      // Shown only when their place was actually published (real node id).
+      // This is the moment the whole contribution loop exists to deliver:
+      // the person who walked to the place and reported it learns they
+      // improved the global map, with a link to their live node.
+      submission.osm_node_id
+        ? el("div", {
+            style: {
+              maxWidth: "480px", textAlign: "center",
+              padding: "var(--s-3) var(--s-4)",
+              border: "1px solid var(--success)",
+              borderRadius: "var(--r-sm)",
+              background: "var(--surface-raised)",
+            },
+          },
+            el("div", {
+              class: "subtitle",
+              style: { color: "var(--success)", marginBottom: "var(--s-1)" },
+            }, "Now on OpenStreetMap"),
+            el("p", {
+              style: {
+                fontSize: "var(--t-sm)", lineHeight: "1.5",
+                color: "var(--text)", margin: "0 0 var(--s-2) 0",
+              },
+            }, "Your report is now part of the open map the whole world reads from. You put this here."),
+            el("a", {
+              href: `https://www.openstreetmap.org/node/${submission.osm_node_id}`,
+              target: "_blank", rel: "noopener",
+              class: "mono",
+              style: { fontSize: "var(--t-xs)", color: "var(--accent)" },
+            }, `View node #${submission.osm_node_id} ↗`),
+          )
+        : null,
     ),
     el("div", { class: "actions" },
       copyLink,

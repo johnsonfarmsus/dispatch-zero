@@ -172,6 +172,27 @@ async def publish_place_to_osm(
             f"this place is already on OSM (node {place.osm_published_node_id})."
         )
 
+    # ---- wikidata enrichment (wp-sourced places only) ----
+    # Wikipedia-sourced places store the article title in `name` but no
+    # Wikidata id (only Overpass places carry one). Resolve the QID from the
+    # title at publish time so the OSM node gets a wikidata= tag — the
+    # strongest semantic link, and the one mappers most want. Best-effort:
+    # a failed lookup just means no wikidata tag, never blocks the publish.
+    wikidata_id = place.wikidata_id
+    if not wikidata_id and place.osm_type == "wp" and place.name:
+        import redis.asyncio as aioredis
+
+        from dispatchzero.integrations.wikipedia import WikipediaClient
+        redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+        wp = WikipediaClient(redis)
+        try:
+            wikidata_id = await wp.resolve_qid(place.name)
+        except Exception as e:  # noqa: BLE001 - enrichment is best-effort
+            log.warning("wikidata QID resolve failed for %r: %s", place.name, e)
+        finally:
+            await wp.aclose()
+            await redis.aclose()
+
     # ---- tags ----
     tags = osm_tagging.tags_for_publish(
         category=place.category,
@@ -180,6 +201,7 @@ async def publish_place_to_osm(
         picker_choice=picker_choice,
         external_link=(submission.external_link if submission else None),
         place_osm_type=place.osm_type,
+        wikidata_id=wikidata_id,
     )
     if tags is None:
         if osm_tagging.is_ambiguous(place.category):

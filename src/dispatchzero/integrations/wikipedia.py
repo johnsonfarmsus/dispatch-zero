@@ -143,6 +143,52 @@ class WikipediaClient:
         )
         return results
 
+    async def resolve_qid(self, title: str) -> str | None:
+        """Resolve a Wikipedia article title to its Wikidata QID via
+        pageprops (wikibase_item). Cached 90d. Returns None if the page
+        has no linked Wikidata item or the lookup fails.
+
+        Used at OSM-publish time to add a wikidata= tag to Wikipedia-sourced
+        places — the strongest semantic link OSM mappers want, and the one
+        that survives article renames."""
+        title = (title or "").strip()
+        if not title:
+            return None
+        cache_key = f"wp:qid:{title}"
+        cached = await self._cache.get(cache_key)
+        if cached is not None:
+            # Cache stores "" as the "looked up, none found" sentinel.
+            return cached or None
+
+        async with _throttle:
+            try:
+                r = await self._http.get(
+                    _BASE_URL,
+                    params={
+                        "action": "query",
+                        "prop": "pageprops",
+                        "ppprop": "wikibase_item",
+                        "titles": title,
+                        "redirects": "1",
+                        "format": "json",
+                    },
+                )
+                r.raise_for_status()
+                data = r.json()
+            except (httpx.HTTPError, ValueError):
+                return None
+
+        pages = data.get("query", {}).get("pages", {}) or {}
+        qid: str | None = None
+        for page in pages.values():
+            qid = (page.get("pageprops", {}) or {}).get("wikibase_item")
+            if qid:
+                break
+        # Cache the result (empty string sentinel for "none") so repeat
+        # publishes of the same place don't re-hit Wikipedia.
+        await self._cache.set(cache_key, qid or "", _EXTRACT_TTL)
+        return qid or None
+
     async def _extracts(self, pageids: Iterable[int]) -> dict[int, str]:
         """Bulk-fetch first-paragraph plaintext for the given pageids."""
         ids = list(pageids)

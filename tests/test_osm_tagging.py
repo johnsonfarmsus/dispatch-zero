@@ -86,6 +86,19 @@ class TestTagsForPublish:
         assert "wikipedia" not in tags
         assert "website" not in tags
 
+    def test_wikidata_qid_attached_when_valid(self):
+        tags = osm_tagging.tags_for_publish(
+            category="mural", place_name="X", wikidata_id="Q12345",
+        )
+        assert tags["wikidata"] == "Q12345"
+
+    def test_malformed_wikidata_qid_dropped(self):
+        for bad in ("12345", "Q", "P31", "Q12a", "", "  Q1 "):
+            tags = osm_tagging.tags_for_publish(
+                category="mural", place_name="X", wikidata_id=bad,
+            )
+            assert "wikidata" not in tags, f"should have dropped {bad!r}"
+
 
 class TestAmbiguity:
     def test_is_ambiguous(self):
