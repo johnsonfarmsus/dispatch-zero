@@ -1,10 +1,54 @@
 import io
 import math
+import warnings
 from datetime import datetime
 from pathlib import Path
 
 import piexif
 from PIL import Image, ImageOps
+
+from dispatchzero.config import get_settings
+
+
+class PhotoTooLargeError(ValueError):
+    """Raised when an uploaded image exceeds the byte or pixel bound, or
+    can't be decoded as an image at all. The route maps this to a 422 so
+    the failure is surfaced in-character, not as a 500."""
+
+
+def decode_image_guarded(raw_bytes: bytes) -> Image.Image:
+    """Open an uploaded image with size + decode guards.
+
+    Rejects (PhotoTooLargeError):
+      - bodies over photo_max_upload_bytes (checked before any decode)
+      - images whose decoded pixel count exceeds photo_max_pixels
+        (decompression-bomb defense via Pillow's MAX_IMAGE_PIXELS)
+      - anything Pillow can't parse as an image
+
+    Returns an open PIL Image on success. Callers should treat the bytes
+    as untrusted and never decode them directly.
+    """
+    settings = get_settings()
+    if len(raw_bytes) > settings.photo_max_upload_bytes:
+        raise PhotoTooLargeError("photo is too large")
+    # Set the library-level pixel cap per call (cheap, idempotent) rather
+    # than at import time so we don't instantiate Settings during import.
+    Image.MAX_IMAGE_PIXELS = settings.photo_max_pixels
+    try:
+        # Pillow RAISES DecompressionBombError only above 2x the cap; between
+        # 1x and 2x it merely warns and still decodes. Escalate that warning
+        # to an error so the cap is a hard bound, not a soft one.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            img = Image.open(io.BytesIO(raw_bytes))
+            # .load() forces the decode, which is what triggers the
+            # decompression-bomb check (a lazy Image.open alone wouldn't).
+            img.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
+        raise PhotoTooLargeError("photo dimensions are too large") from e
+    except Exception as e:  # noqa: BLE001 - any decode failure is a bad upload
+        raise PhotoTooLargeError("could not read photo") from e
+    return img
 
 
 def haversine_distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -51,8 +95,12 @@ def save_thumbnail(
     max_dim: int = 600,
     quality: int = 70,
 ) -> None:
-    """Decode, auto-orient, resize to fit (max_dim x max_dim), strip EXIF, save JPEG."""
-    img = Image.open(io.BytesIO(raw_bytes))
+    """Decode, auto-orient, resize to fit (max_dim x max_dim), strip EXIF, save JPEG.
+
+    Decoding goes through decode_image_guarded so a decompression-bomb or
+    oversized upload raises PhotoTooLargeError rather than OOM-ing the
+    worker."""
+    img = decode_image_guarded(raw_bytes)
     img = ImageOps.exif_transpose(img)
     img.thumbnail((max_dim, max_dim))
     if img.mode != "RGB":

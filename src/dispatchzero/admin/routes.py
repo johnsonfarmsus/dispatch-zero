@@ -340,7 +340,7 @@ async def osm_disconnect(
     db: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> OsmStatusOut:
-    await osm_oauth.clear_credentials(db)
+    await osm_oauth.clear_credentials(db, settings)
     return await osm_status(_admin=_admin, db=db, settings=settings)
 
 

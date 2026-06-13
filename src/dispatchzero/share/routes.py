@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 from typing import Annotated
 
 from dispatchzero.config import get_settings
@@ -252,7 +253,8 @@ async def share_card(
             )
             rank_then = completions_to_rank(total_then)
             try:
-                compose_mission_card(
+                await run_in_threadpool(
+                    compose_mission_card,
                     photo_path=photo_path,
                     place_name=place.name or "Unmarked target",
                     callsign=user.callsign,

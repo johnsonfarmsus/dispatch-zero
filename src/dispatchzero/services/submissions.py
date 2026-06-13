@@ -35,6 +35,7 @@ import piexif
 from PIL import Image
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from dispatchzero.config import get_settings
 from dispatchzero.models import (
@@ -176,7 +177,8 @@ async def create_submission(
     # Save the photo + compose the PENDING contribution card.
     photo_dir = Path(settings.photo_upload_dir) / "submissions" / str(user.id)
     photo_path = photo_dir / f"{submission.id}.jpg"
-    save_thumbnail(
+    await run_in_threadpool(
+        save_thumbnail,
         raw_photo, photo_path,
         max_dim=settings.photo_max_dimension,
         quality=settings.photo_jpeg_quality,
@@ -192,7 +194,8 @@ async def create_submission(
     completions = await user_completions_count(db, user_id=user.id)
     rank_label = rank_name(user.adventure_style, completions_to_rank(completions))
     try:
-        compose_contribution_card(
+        await run_in_threadpool(
+            compose_contribution_card,
             photo_path=photo_path,
             place_name=name,
             callsign=user.callsign,
@@ -348,7 +351,8 @@ async def _restamp_card(
         submitter.adventure_style, completions_to_rank(completions),
     )
     try:
-        compose_contribution_card(
+        await run_in_threadpool(
+            compose_contribution_card,
             photo_path=photo_path,
             place_name=place.name or "",
             callsign=submitter.callsign,

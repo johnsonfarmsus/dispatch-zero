@@ -180,22 +180,37 @@ async def _do_check(db: AsyncSession, submission_id) -> None:
 
     matches: list[dict] = []
     for e in elements:
-        e_lat = e.get("lat") or e.get("center", {}).get("lat")
-        e_lng = e.get("lon") or e.get("center", {}).get("lon")
+        # Nodes carry lat/lon directly; ways/relations carry a `center`.
+        # Use explicit `is None` checks, NOT `or` — a legitimate 0.0
+        # latitude (equator) is falsy and `e.get("lat") or ...` would
+        # wrongly fall through to center and then skip the element.
+        center = e.get("center") or {}
+        e_lat = e.get("lat")
         if e_lat is None:
+            e_lat = center.get("lat")
+        e_lng = e.get("lon")
+        if e_lng is None:
+            e_lng = center.get("lon")
+        # Need BOTH to compute distance; a missing lng used to crash _km
+        # and abort the whole check, leaving it "pending" forever.
+        if e_lat is None or e_lng is None:
             continue
-        tags = e.get("tags", {}) or {}
-        name = tags.get("name") or "(unnamed)"
-        osm_type = e.get("type", "node")
-        osm_id = e.get("id")
-        matches.append({
-            "name": name,
-            "osm_type": osm_type,
-            "osm_id": osm_id,
-            "osm_url": f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
-            "distance_m": int(round(_km(lat, lng, e_lat, e_lng) * 1000)),
-            "tags_summary": _summarize_tags(tags),
-        })
+        try:
+            tags = e.get("tags", {}) or {}
+            name = tags.get("name") or "(unnamed)"
+            osm_type = e.get("type", "node")
+            osm_id = e.get("id")
+            matches.append({
+                "name": name,
+                "osm_type": osm_type,
+                "osm_id": osm_id,
+                "osm_url": f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
+                "distance_m": int(round(_km(lat, lng, e_lat, e_lng) * 1000)),
+                "tags_summary": _summarize_tags(tags),
+            })
+        except Exception:  # noqa: BLE001 - one bad element shouldn't abort the check
+            log.warning("pre-flight: skipping malformed overpass element", exc_info=True)
+            continue
     matches.sort(key=lambda m: m["distance_m"])
 
     submission.osm_preflight_checked_at = datetime.now(timezone.utc)

@@ -49,11 +49,25 @@ class Settings(BaseSettings):
     photo_jpeg_quality: int = 70
     exif_freshness_window_seconds: int = 600  # 10 min
     gps_verification_radius_m: int = 80  # single radius for all categories
+    # Upload abuse bounds. A phone photo is a few MB; 15 MB is generous
+    # headroom while still rejecting multi-hundred-MB bodies before we
+    # read them fully into memory. photo_max_pixels caps the DECODED
+    # dimensions to defeat decompression bombs (a few-KB PNG that expands
+    # to gigabytes of RAM). 40 MP comfortably exceeds any real phone
+    # camera (a 108 MP shot downscales fine; we only need enough detail
+    # for a 600px thumbnail anyway).
+    photo_max_upload_bytes: int = 15 * 1024 * 1024
+    photo_max_pixels: int = 40_000_000
 
     # Rate limits — bounds on expensive endpoints.
     rate_limit_mission_request_per_day: int = 50
     rate_limit_mission_generate_per_day: int = 50
     rate_limit_signup_per_ip_per_hour: int = 10
+    # Community submissions are cheap for the user but trigger a Place +
+    # Submission row, Pillow card composition, and an outbound Overpass
+    # pre-flight per call. Cap per-user per-day so one account can't flood
+    # the review queue or get our server IP rate-limited by Overpass.
+    rate_limit_submission_per_day: int = 30
 
     # ---- OSM integration ----
     # OAuth 2.0 client registered at openstreetmap.org/oauth2/applications.

@@ -32,6 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.config import Settings
+from dispatchzero.crypto import decrypt_token, encrypt_token
 from dispatchzero.models import OsmCredentials
 
 log = logging.getLogger(__name__)
@@ -181,25 +182,29 @@ async def save_credentials(
         settings, access_token=access_token,
     )
 
+    # Encrypt both tokens before they touch the DB (see dispatchzero.crypto).
+    enc_access = encrypt_token(access_token)
+    enc_refresh = encrypt_token(refresh_token) if refresh_token else ""
+
     existing = (
         await db.execute(select(OsmCredentials).where(OsmCredentials.id == 1))
     ).scalar_one_or_none()
     if existing is None:
         creds = OsmCredentials(
             id=1,
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=enc_access,
+            refresh_token=enc_refresh,
             access_token_expires_at=expires_at,
             osm_user_id=osm_user_id,
             osm_username=osm_username,
         )
         db.add(creds)
     else:
-        existing.access_token = access_token
+        existing.access_token = enc_access
         # OSM rotates refresh_tokens. If they sent a new one, use it; if
         # they reused the old one (unusual), keep what we had.
-        if refresh_token:
-            existing.refresh_token = refresh_token
+        if enc_refresh:
+            existing.refresh_token = enc_refresh
         existing.access_token_expires_at = expires_at
         existing.osm_user_id = osm_user_id
         existing.osm_username = osm_username
@@ -232,19 +237,45 @@ async def get_fresh_access_token(
         # a naive datetime, treat it as UTC rather than crash on compare.
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at - now > timedelta(seconds=_REFRESH_LEAD_SECONDS):
-        return creds.access_token
-    # Need to refresh.
+        return decrypt_token(creds.access_token)
+    # Need to refresh. Decrypt the stored refresh token first.
     log.info("OSM access token expiring — refreshing")
-    payload = await _refresh_tokens(settings, refresh_token=creds.refresh_token)
+    payload = await _refresh_tokens(
+        settings, refresh_token=decrypt_token(creds.refresh_token),
+    )
     creds_after = await save_credentials(db, settings, token_response=payload)
-    return creds_after.access_token
+    return decrypt_token(creds_after.access_token)
 
 
-async def clear_credentials(db: AsyncSession) -> None:
-    """Drop the stored credentials. Doesn't tell OSM (no revoke endpoint
-    we need to call) — just makes the local app forget it was connected."""
+async def clear_credentials(db: AsyncSession, settings: Settings | None = None) -> None:
+    """Drop the stored credentials and best-effort revoke the token upstream
+    so 'Disconnect' actually invalidates access at OSM rather than just
+    making the local app forget. Revocation failure doesn't block the local
+    delete — a stale-but-soon-expiring access token is acceptable."""
     creds = await get_credentials(db)
     if creds is None:
         return
+    if settings is not None:
+        try:
+            await _revoke_token(settings, token=decrypt_token(creds.access_token))
+        except Exception as e:  # noqa: BLE001 - revoke is best-effort
+            log.warning("OSM token revoke failed (continuing with local delete): %s", e)
     await db.delete(creds)
     await db.commit()
+
+
+async def _revoke_token(settings: Settings, *, token: str) -> None:
+    """POST the OAuth2 token-revocation endpoint. OSM follows RFC 7009."""
+    data = {
+        "token": token,
+        "client_id": settings.osm_client_id,
+        "client_secret": settings.osm_client_secret,
+    }
+    async with httpx.AsyncClient(
+        timeout=15.0, headers={"User-Agent": settings.osm_user_agent},
+    ) as client:
+        r = await client.post(
+            f"{settings.osm_oauth_base_url}/oauth2/revoke", data=data,
+        )
+    if r.status_code not in (200, 204):
+        log.warning("OSM token revoke returned %s", r.status_code)

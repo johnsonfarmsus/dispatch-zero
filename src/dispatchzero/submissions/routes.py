@@ -2,19 +2,22 @@
 
 Submission lifecycle is:
 - POST /submissions/capture          create + persist photo + compose PENDING card
-- GET  /submissions/{id}             read the submission (self only)
-- GET  /submissions/{id}/photo.jpg   raw thumbnail (self only)
-- GET  /submissions/{id}/card.jpg    composed contribution card (self only)
+- GET  /submissions                  list the submitter's own submissions
+- GET  /submissions/{id}             read the submission (self or admin)
+- GET  /submissions/{id}/photo.jpg   raw thumbnail (self or admin)
+- GET  /submissions/{id}/card.jpg    composed contribution card (self or admin)
 
-Approval/rejection live in services.submissions and are driven from the
-admin CLI (dispatchzero.tools.review_submissions) rather than HTTP — keeping
-moderator actions off the public API surface.
+Approval / rejection / OSM publishing live in services.submissions and are
+driven from the in-app admin review queue (dispatchzero.admin.routes), gated
+by require_admin. A break-glass CLI (dispatchzero.tools.review_submissions)
+also exists for server-side review without the UI.
 """
 import logging
 import uuid
 from pathlib import Path
 from typing import Annotated, Literal
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -22,8 +25,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.auth.deps import current_user
+from dispatchzero.config import Settings, get_settings
 from dispatchzero.db import get_session
 from dispatchzero.models import Place, PlaceCategory, Submission, User
+from dispatchzero.ratelimit import RateLimitExceeded, check_and_increment
+from dispatchzero.services.photo import PhotoTooLargeError
 from dispatchzero.services.submissions import (
     SubmissionNotFoundError,
     SubmissionRejectedError,
@@ -33,6 +39,12 @@ from dispatchzero.services.submissions import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
+
+
+async def _get_redis(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> aioredis.Redis:
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
 class SubmissionOut(BaseModel):
@@ -90,6 +102,7 @@ _CATEGORY_VALUES = Literal[
 async def capture(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
     background_tasks: BackgroundTasks,
     photo: Annotated[UploadFile, File(description="Captured photo")],
     name: Annotated[str, Form(min_length=1, max_length=200)],
@@ -110,10 +123,32 @@ async def capture(
     Returns the new Submission row immediately, status=pending. The user can
     fetch the composed contribution card at GET /submissions/{id}/card.jpg.
     """
+    settings = get_settings()
+    # Per-user daily cap: one account can't flood the queue or get our
+    # server IP banned by Overpass via the background pre-flight.
+    try:
+        await check_and_increment(
+            redis=redis, scope="submission_capture",
+            identifier=str(user.id),
+            max_count=settings.rate_limit_submission_per_day,
+            window_seconds=86400,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="you've filed a lot of reports today — try again tomorrow",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
+
     raw = await photo.read()
     if not raw:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "photo upload is empty",
+        )
+    if len(raw) > settings.photo_max_upload_bytes:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "that image is too large — send a standard photo",
         )
     try:
         submission = await create_submission(
@@ -126,6 +161,11 @@ async def capture(
             lat=lat,
             lng=lng,
         )
+    except PhotoTooLargeError as e:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "that image can't be processed — send a standard photo",
+        ) from e
     except SubmissionRejectedError as e:
         # 422 to mirror the mission-capture failure shape — the upload
         # passed structural validation but failed semantic checks

@@ -4,7 +4,15 @@
 
 dispatchzero.ataary.com {
     encode gzip zstd
-    reverse_proxy app:8000
+
+    reverse_proxy app:8000 {
+        # Reset the client-facing X-Forwarded-For to the real connecting IP,
+        # discarding any value the client supplied. Without this, uvicorn
+        # (running --forwarded-allow-ips '*') trusts a client-controlled XFF,
+        # letting an attacker rotate the header to get a fresh rate-limit
+        # bucket per request and bypass the login / signup / submission caps.
+        header_up X-Forwarded-For {remote_host}
+    }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"

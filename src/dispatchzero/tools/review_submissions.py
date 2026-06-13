@@ -1,29 +1,27 @@
-"""Maintainer CLI for the community-submission review queue.
+"""Break-glass maintainer CLI for the community-submission review queue.
+
+The PRIMARY review path is the in-app admin queue (dispatchzero.admin.routes,
+the "Admin" link in Settings). This CLI is a server-side fallback for review
+without the UI — handy over SSH, or if the frontend is down. It does NOT do
+OSM publishing; use the web admin queue for the Submit-to-OSM flow.
 
 Run inside the app container so settings + DB connection resolve normally:
 
     docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app \\
-        python -m dispatchzero.tools.review_submissions
+        python -m dispatchzero.tools.review_submissions --reviewer <callsign>
 
 For each pending submission, prints the metadata + a local path to the
-photo (you'll have to copy it off-VPS to actually look at it; the route
-GET /submissions/{id}/photo.jpg also works for any reviewer who knows the
-ID, but that endpoint is currently self-only and would need a separate
-admin auth path to use here). Then prompts:
+photo. Then prompts:
 
-    [a] approve
-    [r] reject (in-character "RETURNED")
-    [s] skip
-    [q] quit
-    [o] approve + push to OSM        (PHASE 2 — not implemented yet)
+    [a] approve   [r] reject (RETURNED)   [s] skip   [q] quit
 
 Approve flips the Place to ACTIVE and re-stamps the contribution card
-VERIFIED; reject leaves the Place at PENDING and re-stamps RETURNED.
-The submitter's dossier card updates in place — no separate notification
-stream.
+VERIFIED; reject re-stamps RETURNED (and deletes the orphan Place — see
+services.submissions.reject_submission). The submitter's dossier card
+updates in place — no separate notification stream.
 
 Designed for "you, on Sunday evening, with a coffee" — not a high-volume
-moderation tool. Re-run it occasionally; it'll skip already-reviewed rows
+moderation tool. Re-run it occasionally; it skips already-reviewed rows
 because the query filters status='pending'.
 """
 import argparse

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,7 +23,9 @@ class User(Base):
     )
     callsign: Mapped[str] = mapped_column(String(32), nullable=False)
     callsign_lower: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Text, not String(255): an argon2 hash fits today but tuning the hasher
+    # params up could exceed 255 and silently truncate. See migration 0020.
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     adventure_style: Mapped[str] = mapped_column(String(16), nullable=False)
 
     missions_this_week: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

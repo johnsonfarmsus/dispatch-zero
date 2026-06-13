@@ -13,11 +13,12 @@ Two pieces:
   Returns a deduplicated, scored list. Solves the airport-lockout problem
   from Trevor's trip: high-priority tiers no longer monopolize the slate.
 
-- `generate_candidate_missions(...)`: fans out parallel mission
-  generations for the chosen N places via asyncio.gather. The shared
-  AsyncSession isn't safe for concurrent ops, so each generation gets its
-  own session via the engine. Wall-clock = slowest single generation
-  (~30s on the OLMo box) rather than sum-of-three (~90s).
+- `generate_candidate_missions(...)`: generates missions for the chosen N
+  places SEQUENTIALLY. Parallel asyncio.gather was tried but the single-GPU
+  OLMo box queues concurrent requests anyway, so "parallel" gave the same
+  wall-clock plus occasional queue-induced timeouts. Each generation gets
+  its own short-lived AsyncSession. See the function docstring for the full
+  rationale and the conditions under which to revisit parallelism.
 
 The route layer (`POST /missions/candidates`) calls these two in sequence
 and returns the list. The accept endpoint just records the user's pick.
@@ -41,13 +42,15 @@ AdventureStyle = Literal["pulp", "agency", "guild"]
 
 # Per-tier (radius_m, source, broad) — mirrors _REQUEST_TIERS in
 # missions/routes.py but accumulates across tiers instead of stopping at
-# the first hit. Five-tier ladder: close art first, broaden the OSM net,
-# fall through to Wikipedia, then a wider OSM sweep.
+# the first hit. Close art first, broaden the OSM net, fall through to
+# Wikipedia, a wider OSM sweep, and finally the local DB.
 #
-# Tier 5 (10km local GNIS) was removed when the broad-tier expansion
-# absorbed all the categories GNIS used to cover (churches, post offices,
-# parks, trails, etc.). OSM coverage of the same coordinates is better,
-# so the local fallback was costing quality more than it contributed.
+# The local tier (Tier 5) no longer pulls the retired statewide GNIS
+# import; with that gone the local table is essentially just community
+# submissions that haven't been published upstream to OSM yet. It stays
+# last so those user-reported places remain dispatchable until they're
+# either pushed to OSM (after which the OSM tiers cover them) or kept
+# local-only by the maintainer.
 _CANDIDATE_TIERS: list[tuple[int, str, bool]] = [
     (2000, "overpass", False),   # Tier 0: 2km narrow OSM (caller's default radius)
     (5000, "overpass", False),   # Tier 1: 5km strict OSM — art-first

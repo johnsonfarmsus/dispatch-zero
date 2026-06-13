@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dispatchzero.auth.deps import current_user
-from dispatchzero.auth.passwords import hash_password, verify_password
+from dispatchzero.auth.passwords import dummy_verify, hash_password, verify_password
 from dispatchzero.auth.ratelimit import LoginRateLimiter
 from dispatchzero.auth.sessions import sign_session
 from dispatchzero.config import Settings, get_settings
@@ -148,7 +148,13 @@ async def login(
         select(User).where(User.callsign_lower == payload.callsign.lower())
     )
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if user is None:
+        # Spend the same argon2 cost as a real verify so response timing
+        # doesn't reveal that the callsign is unregistered.
+        dummy_verify()
+        await limiter.record_failure(ip)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
+    if not verify_password(payload.password, user.password_hash):
         await limiter.record_failure(ip)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
 

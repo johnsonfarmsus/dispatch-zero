@@ -7,6 +7,7 @@ from typing import Literal
 from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from dispatchzero.config import get_settings
 from dispatchzero.models import (
@@ -57,7 +58,11 @@ async def capture_mission(
     completion_id = uuid.uuid4()
     photo_dir = Path(settings.photo_upload_dir) / "completions" / str(user.id)
     photo_path = photo_dir / f"{completion_id}.jpg"
-    save_thumbnail(
+    # Pillow work is CPU-bound; run it in a worker thread so it doesn't
+    # block the single event loop (and every other concurrent request)
+    # for the duration of the decode/resize/encode.
+    await run_in_threadpool(
+        save_thumbnail,
         raw_photo,
         photo_path,
         max_dim=settings.photo_max_dimension,
@@ -77,7 +82,8 @@ async def capture_mission(
 
     card_path = Path(settings.photo_upload_dir) / "cards" / f"{completion_id}.jpg"
     try:
-        compose_mission_card(
+        await run_in_threadpool(
+            compose_mission_card,
             photo_path=photo_path,
             place_name=place.name or "Unmarked target",
             callsign=user.callsign,

@@ -95,3 +95,46 @@ def test_make_test_jpeg_round_trips_datetime():
     dt = datetime(2026, 4, 26, 12, 0, 0)
     raw = make_test_jpeg(captured_at=dt)
     assert read_exif_datetime(raw).hour == 12
+
+
+# --- decode_image_guarded: upload abuse bounds -------------------------------
+
+from dispatchzero.config import get_settings  # noqa: E402
+from dispatchzero.services.photo import (  # noqa: E402
+    PhotoTooLargeError,
+    decode_image_guarded,
+)
+
+
+def test_decode_guarded_accepts_normal_image():
+    raw = make_test_jpeg(size=(800, 600))
+    img = decode_image_guarded(raw)
+    assert img.size == (800, 600)
+
+
+def test_decode_guarded_rejects_oversized_bytes(monkeypatch):
+    monkeypatch.setenv("PHOTO_MAX_UPLOAD_BYTES", "1024")  # 1 KB
+    get_settings.cache_clear()
+    raw = make_test_jpeg(size=(1200, 1200))  # well over 1 KB encoded
+    with pytest.raises(PhotoTooLargeError, match="too large"):
+        decode_image_guarded(raw)
+
+
+def test_decode_guarded_rejects_garbage_bytes():
+    with pytest.raises(PhotoTooLargeError, match="could not read"):
+        decode_image_guarded(b"this is not an image at all")
+
+
+def test_decode_guarded_rejects_too_many_pixels(monkeypatch):
+    # Lower the pixel cap below a 1200x1200 (1.44M px) image and confirm
+    # the decompression-bomb guard fires.
+    monkeypatch.setenv("PHOTO_MAX_PIXELS", "1000000")  # 1 MP
+    get_settings.cache_clear()
+    raw = make_test_jpeg(size=(1200, 1200))
+    with pytest.raises(PhotoTooLargeError):
+        decode_image_guarded(raw)
+
+
+def test_save_thumbnail_rejects_garbage(tmp_path):
+    with pytest.raises(PhotoTooLargeError):
+        save_thumbnail(b"not an image", tmp_path / "x.jpg")

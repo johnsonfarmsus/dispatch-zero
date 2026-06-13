@@ -46,6 +46,8 @@ from dispatchzero.services.mission_flow import (
     rate_completion,
     user_completions_count,
 )
+from dispatchzero.services.photo import PhotoTooLargeError
+from starlette.concurrency import run_in_threadpool
 from dispatchzero.services.missions import (
     MissionGenerationError,
     get_or_generate_mission,
@@ -530,6 +532,13 @@ async def capture(
     raw = await photo.read()
     if not raw:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty photo upload")
+    settings = get_settings()
+    if len(raw) > settings.photo_max_upload_bytes:
+        # Reject oversized bodies before any DB or image work.
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "that image is too large, agent — send a standard photo",
+        )
 
     try:
         completion = await capture_mission(
@@ -537,6 +546,11 @@ async def capture(
             raw_photo=raw,
             capture_lat=lat, capture_lng=lng, capture_accuracy_m=accuracy_m,
         )
+    except PhotoTooLargeError as e:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "that image can't be processed, agent — send a standard photo",
+        ) from e
     except CaptureFailedError as e:
         # In-character to the client: don't leak GPS vs EXIF.
         # Server-side: log the actual reason so we can debug from the logs.
@@ -623,7 +637,8 @@ async def completion_card(
         )
         rank_then = completions_to_rank(total_then)
         try:
-            compose_mission_card(
+            await run_in_threadpool(
+                compose_mission_card,
                 photo_path=photo_path,
                 place_name=place.name or "Unmarked target",
                 callsign=user.callsign,
