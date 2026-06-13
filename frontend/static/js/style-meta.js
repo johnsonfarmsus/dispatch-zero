@@ -84,6 +84,16 @@ export const TAGLINES = {
   guild: "Ancient, ceremonial, formal.",
 };
 
+// Per-org accent colors. Mirrors the body[data-style="..."] --accent values
+// in tokens.css. Used where we need an org's color BEFORE the body's
+// data-style is set (e.g. the signup org picker, where every card would
+// otherwise inherit the default agency teal via var(--accent)).
+export const ACCENTS = {
+  pulp: "#d68a3c",
+  agency: "#4ec5d6",
+  guild: "#a472d6",
+};
+
 export function styleMeta(style) {
   return STYLE_META[style] || STYLE_META.agency;
 }

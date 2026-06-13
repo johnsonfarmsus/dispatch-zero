@@ -2,7 +2,7 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { setUser } from "../state.js";
 import { navigate } from "../router.js";
-import { STYLE_META, TAGLINES } from "../style-meta.js";
+import { STYLE_META, TAGLINES, ACCENTS } from "../style-meta.js";
 
 export function signup() {
   const errEl = el("div", { class: "fault", hidden: true });
@@ -22,10 +22,23 @@ export function signup() {
   let selectedStyle = "agency";  // default; the card is highlighted below
   const orderedStyles = ["pulp", "agency", "guild"];
   const cards = {};
+  const nameSpans = {};
 
   function paintSelection() {
     for (const s of orderedStyles) {
-      cards[s].className = s === selectedStyle ? "primary" : "";
+      const btn = cards[s];
+      const isSel = s === selectedStyle;
+      // Highlight the selected card with THAT org's accent (not the global
+      // var(--accent), which is locked to agency teal here). Unselected
+      // cards fall back to the default surface rule.
+      const accent = ACCENTS[s] || "var(--accent)";
+      btn.style.borderColor = isSel ? accent : "var(--surface-rule)";
+      // The org-name span has its own .subtitle color, so set it directly.
+      nameSpans[s].style.color = isSel ? accent : "var(--text-muted)";
+      // Faint tint of the org color behind the selected card.
+      btn.style.background = isSel
+        ? `color-mix(in srgb, ${accent} 12%, var(--surface-raised))`
+        : "var(--surface-raised)";
     }
   }
 
@@ -35,6 +48,7 @@ export function signup() {
   // WITHOUT scrolling.
   function orgCard(s) {
     const meta = STYLE_META[s];
+    const nameSpan = el("span", { class: "subtitle", style: { flex: "0 0 auto" } }, meta.org);
     const btn = el("button", {
       type: "button",
       style: {
@@ -44,7 +58,7 @@ export function signup() {
         flexWrap: "wrap",
       },
     },
-      el("span", { class: "subtitle", style: { flex: "0 0 auto" } }, meta.org),
+      nameSpan,
       el("span", {
         class: "muted",
         style: { fontSize: "var(--t-xs)", lineHeight: "1.2" },
@@ -55,6 +69,7 @@ export function signup() {
       paintSelection();
     });
     cards[s] = btn;
+    nameSpans[s] = nameSpan;
     return btn;
   }
 
