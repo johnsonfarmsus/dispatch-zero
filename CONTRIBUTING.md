@@ -55,6 +55,8 @@ docker compose exec app alembic upgrade head
 
 ## Running tests
 
+Backend (pytest, in the test container):
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test pytest
 ```
@@ -64,6 +66,19 @@ Subset:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm test pytest tests/test_import_gnis.py -v
 ```
+
+Frontend (Node's built-in test runner, no dependencies to install — needs
+Node 21+). The harness uses a tiny headless DOM stub (`frontend/test-setup.mjs`)
+so the real modules run without a browser:
+
+```bash
+cd frontend && npm test
+```
+
+It covers the highest-value untested layer: the router (matching, error
+boundary, cleanup hooks), the GPS/flow helpers (geo math, fix/error
+listeners), the `el()` DOM builder, and the api.js fetch wrapper (including
+NetworkError normalization).
 
 ## Branching and commits
 

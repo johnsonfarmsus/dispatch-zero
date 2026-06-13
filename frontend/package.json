@@ -1,0 +1,9 @@
+{
+  "name": "dispatch-zero-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Vanilla-JS PWA frontend. package.json exists only so Node treats the .js modules as ESM for the test runner; the browser loads them directly via <script type=module> and ignores this file.",
+  "scripts": {
+    "test": "node --test --import ./test-setup.mjs"
+  }
+}
