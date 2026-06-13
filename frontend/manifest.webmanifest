@@ -1,12 +1,14 @@
 {
   "name": "Dispatch Zero",
   "short_name": "Dispatch Zero",
-  "description": "Field assignments from Zero.",
+  "description": "A location-based adventure quest. Real landmarks, real walks, in-character briefings from a handler named Zero.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0e0c0a",
   "theme_color": "#0e0c0a",
   "icons": [
-    { "src": "/static/avatars/zero-agency.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/static/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/static/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }

@@ -1,7 +1,8 @@
 import { el } from "../../dom.js";
 import {
   loadMission, startWatchingPosition, stopWatchingPosition,
-  onFix, getLastFix, distanceM, bearingDeg, bearingCompassLabel, formatDistance,
+  onFix, onFixError, geoErrorMessage, getLastFix,
+  distanceM, bearingDeg, bearingCompassLabel, formatDistance,
 } from "../../flow.js";
 import { navigate } from "../../router.js";
 
@@ -119,6 +120,7 @@ export async function transit({ id }) {
     bearingToTarget = b;
     distEl.textContent = formatDistance(d);
     bearingEl.textContent = `BEARING ${bearingCompassLabel(b)} ${Math.round(b)}°`;
+    bearingEl.style.color = "";  // clear any prior geo-error styling
     updateArrow();
 
     if (d <= RADIUS_M) {
@@ -133,6 +135,12 @@ export async function transit({ id }) {
   const initial = getLastFix();
   if (initial) applyFix(initial);
   const off = onFix(applyFix);
+  // Surface geolocation failures on the bearing readout instead of leaving
+  // it stuck on "ACQUIRING FIX" with the capture button perpetually waiting.
+  const offErr = onFixError((err) => {
+    bearingEl.textContent = geoErrorMessage(err).toUpperCase();
+    bearingEl.style.color = "var(--danger)";
+  });
 
   const element = el("div", { class: "screen" },
     el("div", { class: "header" },
@@ -153,7 +161,14 @@ export async function transit({ id }) {
     element,
     cleanup: () => {
       off();
+      offErr();
       window.removeEventListener("deviceorientation", orientationHandler);
+      // Stop the GPS watch on exit. Capture uses one-shot getFreshFix (not
+      // the continuous watch), so stopping here is safe; if the user backs
+      // out to Transit later it re-starts on mount. Without this, Stand
+      // Down / browser-back / a failed capture all leak the watch — battery
+      // drain + a persistent location indicator on a privacy-first app.
+      stopWatchingPosition();
     },
   };
 }

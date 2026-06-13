@@ -6,6 +6,7 @@ let _cached = null;       // { id, mission_data, fetched_at }
 let _watchId = null;
 let _lastFix = null;      // { lat, lng, accuracy_m, ts }
 const _fixListeners = new Set();
+const _errListeners = new Set();   // geolocation watch errors
 let _lastDebrief = null;  // populated by Capture, consumed by Debrief
 
 export async function loadMission(id) {
@@ -42,7 +43,11 @@ export function startWatchingPosition() {
       };
       for (const fn of _fixListeners) fn(_lastFix);
     },
-    () => { /* fail silent — UI shows no-fix state */ },
+    (err) => {
+      // No longer fully silent: notify error listeners so screens can show
+      // an actionable message instead of hanging on "Acquiring fix…".
+      for (const fn of _errListeners) fn(err);
+    },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
   );
 }
@@ -59,6 +64,22 @@ export function getLastFix() { return _lastFix; }
 export function onFix(fn) {
   _fixListeners.add(fn);
   return () => _fixListeners.delete(fn);
+}
+
+// Subscribe to geolocation watch errors. Returns an unsubscribe fn.
+export function onFixError(fn) {
+  _errListeners.add(fn);
+  return () => _errListeners.delete(fn);
+}
+
+// Map a GeolocationPositionError code to an in-character message.
+export function geoErrorMessage(err) {
+  if (err && typeof err.code === "number") {
+    if (err.code === 1) return "Location denied — enable it in your browser settings, agent.";
+    if (err.code === 2) return "GPS signal lost. Move to open sky and try again.";
+    if (err.code === 3) return "Location is taking too long. Move to open sky, agent.";
+  }
+  return "Location signal unavailable. Check permissions, agent.";
 }
 
 export async function getFreshFix({
