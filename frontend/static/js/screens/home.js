@@ -2,7 +2,7 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
-import { getFreshFix, clearMissionCache, clearLastDebrief } from "../flow.js";
+import { getFreshFix, clearMissionCache, clearLastDebrief, setCandidates } from "../flow.js";
 import { styleMeta, rankName } from "../style-meta.js";
 
 export async function home() {
@@ -165,16 +165,28 @@ export async function home() {
         enableHighAccuracy: false,
         timeoutMs: 30000,
       });
-      requestStatus.textContent = "Acquiring target…";
-      const r = await api.post("/missions/request", {
+      requestStatus.textContent = "Scanning for targets…";
+      const r = await api.post("/missions/candidates", {
         lat: fix.lat,
         lng: fix.lng,
         radius_m: 2000,
       });
       if (r.ok) {
+        const list = r.data?.candidates || [];
+        if (list.length === 0) {
+          requestStatus.style.color = "var(--danger)";
+          requestStatus.textContent =
+            r.data?.empty_message ||
+            "No eligible targets within reach, agent. Try a town with more landmarks.";
+          requestBtn.disabled = false;
+          return;
+        }
         clearMissionCache();
         clearLastDebrief();
-        await navigate(`/mission/${r.data.id}/dispatch`);
+        // Stash the request origin alongside the candidates so the choose
+        // screen can recompute nothing — distances came from the server.
+        setCandidates(list);
+        await navigate("/dispatch/choose");
         return;
       }
       throw new Error(r.data?.detail || "Dispatch line is unreliable.");

@@ -31,6 +31,16 @@ export function setLastDebrief(d) { _lastDebrief = d; }
 export function getLastDebrief() { return _lastDebrief; }
 export function clearLastDebrief() { _lastDebrief = null; }
 
+// Candidate slate from the last "Request Dispatch" — the 3 place options the
+// user chooses between. Held in module memory (like _lastDebrief) so the
+// choose screen and the back-from-dispatch button can read it without a
+// re-request. Cleared when a mission is accepted into transit or on a fresh
+// request.
+let _candidates = null;
+export function setCandidates(c) { _candidates = c; }
+export function getCandidates() { return _candidates; }
+export function clearCandidates() { _candidates = null; }
+
 export function startWatchingPosition() {
   if (_watchId !== null || !navigator.geolocation) return;
   _watchId = navigator.geolocation.watchPosition(

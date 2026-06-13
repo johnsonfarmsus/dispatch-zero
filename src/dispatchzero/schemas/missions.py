@@ -50,18 +50,17 @@ class MissionOut(BaseModel):
 
 
 class CandidateOut(BaseModel):
-    """One entry in the list returned by POST /missions/candidates. Carries
-    enough for the list UI to render a card AND for the accept call to
-    promote the pre-generated mission to active dispatch.
+    """One entry in the list returned by POST /missions/candidates.
 
-    `mission_id` is already a real persisted Mission row — accepting just
-    flips the user's flow into transit. The other candidates' missions stay
-    in the library for future users at the same place."""
-    mission_id: uuid.UUID
+    These are DISCOVERED places, not yet generated missions — the briefing
+    is generated only when the user accepts one (POST /candidates/accept),
+    so we don't burn N sequential generations (~40s each on the single-GPU
+    OLMo box) for candidates the user won't pick. The card shows place +
+    distance + a short preview, which is enough to choose."""
     place_id: uuid.UUID
     place_name: str
     place_category: str
-    teaser: str | None
+    preview: str | None       # short description for the card (if any)
     distance_m: int           # great-circle distance from the request lat/lng
     bearing_compass: str      # "N" / "NE" / ... — coarse 8-point compass
 

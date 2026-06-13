@@ -35,7 +35,6 @@ from dispatchzero.services.candidates import (
     distance_and_bearing_m,
     empty_message,
     gather_candidate_places,
-    generate_candidate_missions,
 )
 from dispatchzero.services.cards import compose_mission_card
 from dispatchzero.services.discovery import discover_nearby
@@ -263,18 +262,20 @@ async def request_mission(
     return await _mission_to_out(db, mission, place)
 
 
-# ----- candidate-list flow (Stage 3) -----
+# ----- candidate-choice flow -----
 #
-# `POST /missions/candidates`: discover N candidates across multiple tiers,
-# pre-generate briefings + teasers for all of them in parallel, return the
-# list. User picks one in the UI → `POST /missions/candidates/{mission_id}/accept`
-# turns that pick into the active mission (essentially a lookup — the mission
-# is already in the DB).
+# `POST /missions/candidates`: discover N nearby places (art-first, then by
+# distance, including community submissions) and return them WITHOUT
+# generating briefings. The user picks one →
+# `POST /missions/candidates/accept` (place_id) generates the briefing for
+# just that place.
 #
-# Why pre-generate all N: the wait happens AT the request anyway (parallel
-# generations = wall-clock of the slowest, ~30s on OLMo). The unpicked
-# briefings stay in the library and serve as free pre-warms for the next
-# user at those places — wasted compute becomes stored value.
+# Why discover-only here: generating all N briefings up front costs N
+# sequential generations (~40s each on the single-GPU OLMo box, which can't
+# parallelize), making the candidate request 3x slower than a single
+# dispatch. Generating only the chosen one keeps the request fast (just the
+# optimized discovery) and costs exactly one generation — the same as the
+# old single-dispatch flow, but with choice.
 
 _CANDIDATE_COUNT = 3
 
@@ -286,16 +287,11 @@ async def request_candidates(
     db: Annotated[AsyncSession, Depends(get_session)],
     redis: Annotated[aioredis.Redis, Depends(_get_redis)],
 ) -> CandidatesOut:
-    """Return up to N candidate missions for the user to pick from.
+    """Return up to N nearby place options for the user to choose from.
 
-    Each candidate has a pre-generated briefing (already persisted as a
-    Mission row) AND a one-sentence in-voice teaser shown in the list UI.
-    Accepting one (POST /missions/candidates/{mission_id}/accept) just
-    surfaces the full mission — no further generation wait.
-
-    Rate-limited per user/day like /missions/request, but note that ONE
-    candidate request burns N briefing generations against the AI backend.
-    """
+    Discover-only: no briefing is generated here. The card shows place name,
+    category, distance + bearing, and a short preview. Generation happens on
+    accept. Rate-limited per user/day (discovery is cheap but caps abuse)."""
     settings = get_settings()
     try:
         await check_and_increment(
@@ -323,66 +319,66 @@ async def request_candidates(
             empty_message=empty_message(payload.lat, payload.lng),
         )
 
-    style = payload.adventure_style or user.adventure_style
-    place_ids = [p["id"] for p in places]
-    results = await generate_candidate_missions(
-        user=user, place_ids=place_ids, adventure_style=style,
-    )
-
     candidates: list[CandidateOut] = []
-    for place_dict, result in zip(places, results):
-        if isinstance(result, Exception):
-            log.warning(
-                "candidate generation failed for place %s: %s",
-                place_dict["id"], result,
-            )
-            continue
-        mission = result
-        # Fetch the place's coordinates for distance + bearing.
-        place_lat, place_lng = await _place_lat_lng(db, mission.place_id)
+    for p in places:
+        place_lat, place_lng = await _place_lat_lng(db, p["id"])
         dist_m, compass = distance_and_bearing_m(
             from_lat=payload.lat, from_lng=payload.lng,
             to_lat=place_lat, to_lng=place_lng,
         )
+        # A short preview from the place's stored description (Wikipedia
+        # extract / submission blurb), trimmed for the card.
+        preview = (p.get("description") or "").strip() or None
+        if preview and len(preview) > 160:
+            preview = preview[:157].rstrip() + "…"
         candidates.append(CandidateOut(
-            mission_id=mission.id,
-            place_id=mission.place_id,
-            place_name=place_dict["name"] or "(unnamed)",
-            place_category=place_dict["category"],
-            teaser=mission.teaser,
+            place_id=p["id"],
+            place_name=p["name"] or "(unnamed)",
+            place_category=p["category"],
+            preview=preview,
             distance_m=dist_m,
             bearing_compass=compass,
         ))
 
-    # If every generation failed, surface that as 503 — the user shouldn't see
-    # an empty list when the cause was AI-side, not coverage-side.
-    if not candidates and places:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "the dispatch line is unreliable, agent — try again",
-        )
-
     return CandidatesOut(candidates=candidates)
 
 
-@router.post("/candidates/{mission_id}/accept", response_model=MissionOut)
+@router.post("/candidates/accept", response_model=MissionOut)
 async def accept_candidate(
-    mission_id: uuid.UUID,
+    payload: MissionGenerateIn,
     user: Annotated[User, Depends(current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[aioredis.Redis, Depends(_get_redis)],
 ) -> MissionOut:
-    """Pick a candidate from the list. Returns the full MissionOut.
-
-    No DB state change — the mission already exists. We just confirm it
-    exists, that it's still active, and that the requester is authed.
-    Future versions could track 'this user chose this candidate' as an
-    analytics signal, but that's not needed for the core flow today.
-    """
-    mission = (
-        await db.execute(select(Mission).where(Mission.id == mission_id))
-    ).scalar_one_or_none()
-    if mission is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "candidate not found")
+    """Accept a chosen candidate place and generate (or library-hit) its
+    briefing. This is the one generation in the candidate flow."""
+    settings = get_settings()
+    try:
+        await check_and_increment(
+            redis=redis, scope="mission_generate",
+            identifier=str(user.id),
+            max_count=settings.rate_limit_mission_generate_per_day,
+            window_seconds=86400,
+        )
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many requests, agent — stand by",
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        ) from e
+    try:
+        mission = await get_or_generate_mission(
+            db=db, user=user,
+            place_id=payload.place_id,
+            adventure_style=payload.adventure_style,
+        )
+    except MissionGenerationError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "the dispatch line is unreliable, agent — try again",
+        ) from e
     place = await _fetch_place(db, mission.place_id)
     return await _mission_to_out(db, mission, place)
 

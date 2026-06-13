@@ -1,5 +1,5 @@
 import { el } from "../../dom.js";
-import { loadMission } from "../../flow.js";
+import { loadMission, getCandidates } from "../../flow.js";
 import { navigate } from "../../router.js";
 import { styleMeta } from "../../style-meta.js";
 
@@ -36,6 +36,17 @@ export async function dispatch({ id }) {
   const acceptBtn = el("button", { class: "primary" }, "Accept");
   acceptBtn.addEventListener("click", () => navigate(`/mission/${mission.id}/objective`));
 
+  // Back to the 3 choices, so the user can pick a different target without
+  // re-requesting (no new generation, no rate-limit hit). Only shown when a
+  // candidate slate is still in memory — i.e. they came from the choose
+  // screen, not a deep link. Falls back to Home otherwise.
+  const hasSlate = (getCandidates() || []).length > 0;
+  const backLink = el("a", {
+    href: hasSlate ? "/dispatch/choose" : "/",
+    "data-route": true, class: "muted",
+    style: { textAlign: "center", padding: "var(--s-2)", fontSize: "var(--t-sm)" },
+  }, hasSlate ? "← Back to choices" : "← Back to Home");
+
   return el("div", { class: "screen" },
     el("div", { class: "header" },
       el("span", {}, "// dispatch zero //"),
@@ -66,6 +77,6 @@ export async function dispatch({ id }) {
       // round-trips through the schema for now in case we want it back, but
       // it doesn't render on this screen.)
     ),
-    el("div", { class: "actions" }, acceptBtn),
+    el("div", { class: "actions" }, acceptBtn, backLink),
   );
 }

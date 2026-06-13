@@ -30,7 +30,7 @@ from typing import Literal
 
 import httpx
 import redis.asyncio as aioredis
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -39,6 +39,16 @@ from dispatchzero.models import Mission, Place, User
 from dispatchzero.services.discovery import discover_nearby
 
 AdventureStyle = Literal["pulp", "agency", "guild"]
+
+# "Primary" (art-first) categories — the strict-tier set. When the user
+# requests candidates, these are offered before everything else, closest
+# first; remaining slots fill with the nearest of any other category. So an
+# art-rich area shows art first, but a close community submission (park /
+# civic / church / infrastructure) still gets a slot when no art is nearby.
+_PRIMARY_CATEGORIES = frozenset(
+    {"mural", "sculpture", "memorial", "historic", "viewpoint"}
+)
+
 
 # Per-tier (radius_m, source, broad) — mirrors _REQUEST_TIERS in
 # missions/routes.py but accumulates across tiers instead of stopping at
@@ -79,31 +89,44 @@ async def gather_candidate_places(
     cemeteries from ever surfacing. Now both tiers contribute to the same
     slate; the user picks.
 
-    Returns a list of place dicts (same shape as `discover_nearby`). Already
-    deduped and capped at `target_count`. May return fewer than target_count
-    if the geographic pool is genuinely sparse — the route layer surfaces
-    that as the "nothing fresh, try another region" message.
+    Returns a list of place dicts (same shape as `discover_nearby`), ordered
+    art-first then by distance, deduped and capped at `target_count`. May
+    return fewer if the geographic pool is genuinely sparse — the route layer
+    surfaces that as the "nothing fresh, try another region" message.
+
+    Selection model (art-first, then fill by distance):
+      1. Build a POOL across tiers. The local tier (community submissions +
+         anything already stored) ALWAYS runs and goes in first, so a close
+         approved submission can never be locked out by source priority.
+      2. Sort the pool: primary/art categories first (closest first), then
+         everything else (closest first).
+      3. Take the top `target_count`.
     """
-    # Tier 0 gets the caller's preferred radius if different from the default.
-    tiers = [(request_radius_m, "overpass", False)] + [
-        t for t in _CANDIDATE_TIERS if t != (request_radius_m, "overpass", False)
+    # Local first (cheap PostGIS, no network) so community submissions are
+    # always in the pool. Then the OSM/Wikipedia tiers, caller radius first.
+    osm_wiki_tiers = [(request_radius_m, "overpass", False)] + [
+        t for t in _CANDIDATE_TIERS
+        if t != (request_radius_m, "overpass", False) and t[1] != "local"
     ]
+    walk = [(10000, "local", False)] + osm_wiki_tiers
 
     seen_keys: set[tuple[int, str, bool]] = set()
     seen_place_ids: set[uuid.UUID] = set()
-    candidates: list[dict] = []
+    pool: list[dict] = []
 
-    for radius_m, source, broad in tiers:
+    for radius_m, source, broad in walk:
         key = (radius_m, source, broad)
         if key in seen_keys:
             continue
         seen_keys.add(key)
-        if len(candidates) >= target_count:
+        # Stop once we have enough. Because the walk runs local first then
+        # strict-before-broad, by the time the pool fills it already holds
+        # the community submissions + the closest art. A warm area is served
+        # entirely from the local DB tier (zero Overpass calls); a sparse or
+        # fresh area falls through to the OSM/Wikipedia tiers as needed.
+        if len(pool) >= target_count:
             break
         try:
-            # Ask for more than we need — we'll dedupe and pick top-N. Asking
-            # for 1 per tier would force us to do tier-by-tier; over-asking
-            # lets us see what each tier offers in one round.
             tier_results = await discover_nearby(
                 db=db, redis=redis, user=user,
                 lat=lat, lng=lng,
@@ -112,17 +135,42 @@ async def gather_candidate_places(
             )
         except httpx.HTTPError:
             # Transient upstream failure — skip this tier and try the next.
-            # Matches existing /missions/request resilience pattern.
             continue
         for p in tier_results:
             if p["id"] in seen_place_ids:
                 continue
             seen_place_ids.add(p["id"])
-            candidates.append(p)
-            if len(candidates) >= target_count:
-                break
+            pool.append(p)
 
-    return candidates[:target_count]
+    if not pool:
+        return []
+
+    # Distances for the whole pool in one query (PostGIS does the math).
+    distances = await _distances_for(db, lat=lat, lng=lng,
+                                     place_ids=[p["id"] for p in pool])
+
+    def _sort_key(p: dict) -> tuple[int, float]:
+        is_secondary = 0 if p["category"] in _PRIMARY_CATEGORIES else 1
+        return (is_secondary, distances.get(p["id"], float("inf")))
+
+    pool.sort(key=_sort_key)
+    return pool[:target_count]
+
+
+async def _distances_for(
+    db: AsyncSession, *, lat: float, lng: float, place_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, float]:
+    """Meters from (lat, lng) to each place, computed by PostGIS in one query."""
+    if not place_ids:
+        return {}
+    target = func.ST_GeogFromText(f"SRID=4326;POINT({lng} {lat})")
+    rows = (
+        await db.execute(
+            select(Place.id, func.ST_Distance(Place.coordinates, target))
+            .where(Place.id.in_(place_ids))
+        )
+    ).all()
+    return {pid: float(dist) for pid, dist in rows}
 
 
 async def generate_candidate_missions(

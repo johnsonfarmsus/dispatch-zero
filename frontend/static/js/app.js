@@ -8,6 +8,7 @@ import { login } from "./screens/login.js";
 import { home } from "./screens/home.js";
 import { stylePicker } from "./screens/style-picker.js";
 import { dispatch as missionDispatch } from "./screens/mission/dispatch.js";
+import { dispatchChoose } from "./screens/dispatch-choose.js";
 import { objective as missionObjective } from "./screens/mission/objective.js";
 import { transit as missionTransit } from "./screens/mission/transit.js";
 import { capture as missionCapture } from "./screens/mission/capture.js";
@@ -48,6 +49,7 @@ async function bootstrap() {
   defineRoute("/signup", () => signup());
   defineRoute("/login", () => login());
   defineRoute("/style", () => stylePicker());
+  defineRoute("/dispatch/choose", () => dispatchChoose());
   defineRoute("/mission/:id/dispatch", (p) => missionDispatch(p));
   defineRoute("/mission/:id/objective", (p) => missionObjective(p));
   defineRoute("/mission/:id/transit", (p) => missionTransit(p));
