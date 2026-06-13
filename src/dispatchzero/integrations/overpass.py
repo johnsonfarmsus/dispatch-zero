@@ -1,4 +1,5 @@
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -120,6 +121,19 @@ class OverpassPlace:
     category: PlaceCategory
 
 
+# Overpass server-side query timeout. The httpx client timeout
+# (OverpassClient) must exceed this so we don't abort a query the server
+# would have answered. Sized so a grouped query completes even on a
+# congested public mirror, while still failing fast enough to fall through
+# the tier ladder.
+_QL_TIMEOUT_S = 40
+
+# Pull the key/value out of every ["key"="value"] tag in a filter string.
+# Name-existence (["name"]) and other bare-key tags are ignored — they're
+# handled post-fetch by the discovery layer's "named only" filter.
+_TAG_RE = re.compile(r'\["([^"]+)"="([^"]+)"\]')
+
+
 def build_query(
     *,
     lat: float,
@@ -131,24 +145,45 @@ def build_query(
     """Build an Overpass QL string covering every requested category's
     strict filters (plus broad filters when broad=True).
 
-    Only node + way are queried. relation is intentionally excluded:
-    on real-world Overpass servers, an `around:` filter on relation
-    can trip on a large nearby boundary multi-polygon and time the
-    whole query out at 25-30s with zero useful results returned.
-    Almost no POI we care about is a relation (place_of_worship is
-    ~always a node or way; same for art, viewpoints, post offices).
+    CRITICAL PERFORMANCE NOTE: filters are GROUPED BY TAG KEY into a single
+    regex-union statement per key, not emitted one-per-filter. The naive
+    one-statement-per-filter form produced ~68 separate `around` spatial
+    scans for an all-categories broad query, which times out even at the
+    server's own 60s limit (each scan re-walks the radius). Grouping cuts
+    that to ~16 statements that actually complete and therefore CACHE,
+    making repeat dispatches in an area fast.
+
+    Over-fetching within a key (e.g. querying all tourism=artwork rather
+    than only artwork_type=mural) is fine: services._classify sorts every
+    returned element into the right category, and unnamed results are
+    dropped downstream.
+
+    Only node + way are queried. relation is excluded: an `around` filter
+    on relation can trip on a large nearby boundary multi-polygon and time
+    the whole query out. Almost no POI we care about is a relation.
     """
-    parts: list[str] = []
+    # key -> set of values, accumulated across all active filters.
+    by_key: dict[str, set[str]] = {}
     for cat in categories:
         filters = list(_CATEGORY_FILTERS.get(cat, []))
         if broad:
             filters.extend(_BROAD_CATEGORY_FILTERS.get(cat, []))
         for filt in filters:
-            parts.append(f"node{filt}(around:{radius_m},{lat},{lng});")
-            parts.append(f"way{filt}(around:{radius_m},{lat},{lng});")
+            for key, value in _TAG_RE.findall(filt):
+                by_key.setdefault(key, set()).add(value)
+
+    parts: list[str] = []
+    # Sorted for deterministic output (stable cache keys + testability).
+    for key in sorted(by_key):
+        values = sorted(by_key[key])
+        if len(values) == 1:
+            sel = f'["{key}"="{values[0]}"]'
+        else:
+            sel = f'["{key}"~"^({"|".join(values)})$"]'
+        parts.append(f"node{sel}(around:{radius_m},{lat},{lng});")
+        parts.append(f"way{sel}(around:{radius_m},{lat},{lng});")
     body = "(" + "".join(parts) + ");"
-    # Generous timeout — broad queries with many filters can be heavy.
-    return f"[out:json][timeout:60];{body}out center tags;"
+    return f"[out:json][timeout:{_QL_TIMEOUT_S}];{body}out center tags;"
 
 
 def _cache_key(
@@ -231,8 +266,12 @@ class OverpassClient:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._cache = JsonCache(redis)
+        # Client timeout must EXCEED the Overpass QL timeout, or we abort a
+        # query the server was still answering (the old 30s client vs 60s QL
+        # mismatch aborted every heavy query mid-flight). +8s of slack over
+        # _QL_TIMEOUT_S covers transit + the server's own wind-down.
         self._http = http_client or httpx.AsyncClient(
-            timeout=30.0, headers={"User-Agent": _USER_AGENT}
+            timeout=_QL_TIMEOUT_S + 8, headers={"User-Agent": _USER_AGENT}
         )
         self._owns_client = http_client is None
 

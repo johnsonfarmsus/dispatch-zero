@@ -15,9 +15,11 @@ def test_build_query_includes_all_categories():
     assert "around:1000" in q
     assert "37.7749" in q
     assert "-122.4194" in q
+    # Filters are grouped by tag key into regex unions, so assert on the
+    # value tokens being present rather than a specific ["key"="value"] form.
     assert "artwork_type" in q
-    assert "historic=memorial" in q or 'historic"="memorial' in q
-    assert "tourism=viewpoint" in q or 'tourism"="viewpoint' in q
+    assert "memorial" in q
+    assert "viewpoint" in q
 
 
 @pytest.mark.asyncio
@@ -110,10 +112,15 @@ async def test_strict_mode_excludes_broad_features(redis_client):
     )
     assert "leisure" not in strict_q
     assert "place_of_worship" not in strict_q
-    assert "natural" not in strict_q or "natural"+"=peak" not in strict_q
+    assert "peak" not in strict_q
+    # Filters are grouped by key into regex unions, so check for the value
+    # tokens rather than a specific ["key"="value"] form.
     assert "leisure" in broad_q
     assert "place_of_worship" in broad_q
-    assert 'natural"="peak' in broad_q
+    assert "peak" in broad_q
+    # Sanity on the grouping itself: an all-categories broad query should be
+    # far fewer around-statements than the ~one-per-filter naive form.
+    assert broad_q.count("around:") <= 20
 
 
 @pytest.mark.asyncio
