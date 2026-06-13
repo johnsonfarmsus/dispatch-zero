@@ -1,5 +1,5 @@
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import piexif
 import pytest
@@ -63,17 +63,17 @@ def test_read_exif_datetime_returns_none_for_garbage_input():
 
 
 def test_read_exif_has_gps_true_when_gps_present():
-    raw = _jpeg_with_exif(datetime.utcnow(), with_gps=True)
+    raw = _jpeg_with_exif(datetime.now(timezone.utc), with_gps=True)
     assert read_exif_has_gps(raw) is True
 
 
 def test_read_exif_has_gps_false_when_absent():
-    raw = _jpeg_with_exif(datetime.utcnow(), with_gps=False)
+    raw = _jpeg_with_exif(datetime.now(timezone.utc), with_gps=False)
     assert read_exif_has_gps(raw) is False
 
 
 def test_save_thumbnail_resizes_and_strips_exif(tmp_path):
-    raw = _jpeg_with_exif(datetime.utcnow(), with_gps=True)
+    raw = _jpeg_with_exif(datetime.now(timezone.utc), with_gps=True)
     out = tmp_path / "out.jpg"
     save_thumbnail(raw, out, max_dim=600, quality=70)
     assert out.exists()
@@ -85,7 +85,7 @@ def test_save_thumbnail_resizes_and_strips_exif(tmp_path):
 
 
 def test_save_thumbnail_creates_parent_dirs(tmp_path):
-    raw = _jpeg_with_exif(datetime.utcnow())
+    raw = _jpeg_with_exif(datetime.now(timezone.utc))
     nested = tmp_path / "a" / "b" / "c" / "out.jpg"
     save_thumbnail(raw, nested, max_dim=600, quality=70)
     assert nested.exists()

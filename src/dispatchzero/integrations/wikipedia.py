@@ -12,6 +12,10 @@ import redis.asyncio as aioredis
 from dispatchzero.integrations._cache import JsonCache
 from dispatchzero.integrations._throttle import MinIntervalThrottle
 
+# Default host; the actual host is built per-instance from the configured
+# wikipedia_language (e.g. "de" -> de.wikipedia.org). Kept as a module
+# constant so existing tests that mock the en host keep matching the
+# default-config client.
 _BASE_URL = "https://en.wikipedia.org/w/api.php"
 _USER_AGENT = "dispatchzero/0.1 (trevor@johnsonfarms.us)"
 _GEOSEARCH_TTL = 60 * 60 * 24 * 30  # 30 days
@@ -19,6 +23,11 @@ _EXTRACT_TTL = 60 * 60 * 24 * 90    # 90 days
 
 # Wikipedia API etiquette: be polite. Process-local 250ms throttle.
 _throttle = MinIntervalThrottle(min_interval_seconds=0.25)
+
+
+def _base_url_for_language(lang: str) -> str:
+    lang = (lang or "en").strip().lower() or "en"
+    return f"https://{lang}.wikipedia.org/w/api.php"
 
 # First-sentence patterns that mean "this article is a populated place" — exclude.
 _POPULATED_PLACE_MARKERS = (
@@ -58,6 +67,7 @@ class WikipediaClient:
         redis: aioredis.Redis,
         *,
         http_client: httpx.AsyncClient | None = None,
+        language: str | None = None,
     ) -> None:
         self._cache = JsonCache(redis)
         self._http = http_client or httpx.AsyncClient(
@@ -65,6 +75,14 @@ class WikipediaClient:
             headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
         )
         self._owns_client = http_client is None
+        # Resolve the language: explicit arg wins, else the configured
+        # default. Build the host once. Default "en" keeps the base URL at
+        # en.wikipedia.org so existing respx mocks still match.
+        if language is None:
+            from dispatchzero.config import get_settings
+            language = get_settings().wikipedia_language
+        self._language = (language or "en").strip().lower() or "en"
+        self._base_url = _base_url_for_language(self._language)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -85,7 +103,7 @@ class WikipediaClient:
 
         async with _throttle:
             r = await self._http.get(
-                _BASE_URL,
+                self._base_url,
                 params={
                     "action": "query",
                     "list": "geosearch",
@@ -163,7 +181,7 @@ class WikipediaClient:
         async with _throttle:
             try:
                 r = await self._http.get(
-                    _BASE_URL,
+                    self._base_url,
                     params={
                         "action": "query",
                         "prop": "pageprops",
@@ -211,7 +229,7 @@ class WikipediaClient:
         async with _throttle:
             try:
                 r = await self._http.get(
-                    _BASE_URL,
+                    self._base_url,
                     params={
                         "action": "query",
                         "prop": "extracts",

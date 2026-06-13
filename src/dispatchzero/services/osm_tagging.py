@@ -32,10 +32,10 @@ _SIMPLE_TAGS: dict[str, list[tuple[str, str]]] = {
     "sculpture": [("tourism", "artwork"), ("artwork_type", "sculpture")],
     "memorial": [("historic", "memorial")],
     "viewpoint": [("tourism", "viewpoint")],
-    # Default place_of_worship to Christian since our coverage is rural US.
-    # OSM mappers will retag with a different religion= if wrong; better
-    # than leaving religion unset, which OSM linters flag.
-    "church": [("amenity", "place_of_worship"), ("religion", "christian")],
+    # religion= is added in tags_for_publish from config.osm_default_religion
+    # (default "christian" for rural-US coverage; set "" to omit), not baked
+    # in here, so non-US instances can change it without a code edit.
+    "church": [("amenity", "place_of_worship")],
     "park": [("leisure", "park")],
     # The "civic" category is loosely defined in our schema; the example
     # given (post office) is the most common case. Pick that as default.
@@ -145,7 +145,9 @@ def auto_wiki_tag_for_place(
     Output format matches the wikipedia= tag convention: '<lang>:<title>'.
     """
     if osm_type == "wp" and name:
-        return f"en:{name}"
+        from dispatchzero.config import get_settings
+        lang = (get_settings().wikipedia_language or "en").strip().lower() or "en"
+        return f"{lang}:{name}"
     return None
 
 
@@ -202,6 +204,13 @@ def tags_for_publish(
         tags["name"] = place_name[:255]
     for k, v in primary:
         tags[k] = v
+    # place_of_worship gets the configured default religion (if any). Kept
+    # here rather than in _SIMPLE_TAGS so it's instance-configurable.
+    if tags.get("amenity") == "place_of_worship":
+        from dispatchzero.config import get_settings
+        religion = (get_settings().osm_default_religion or "").strip()
+        if religion:
+            tags["religion"] = religion
     # External link → wikipedia= or website=. We prefer the wikipedia tag
     # when applicable because it's the strongest semantic link; website is
     # the catch-all for everything else (official sites, local history

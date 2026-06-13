@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from dispatchzero.services.photo import make_test_jpeg
 from dispatchzero.services.verification import verify_capture
 
 
 def _now_utc() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def test_verify_passes_for_in_radius_fresh_photo():

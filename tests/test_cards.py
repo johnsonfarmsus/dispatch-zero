@@ -4,7 +4,7 @@ Verify the composer produces a valid JPEG of the right dimensions across
 each style and handles edge cases (long place name, long flavor text,
 unknown style). Visual quality is reviewed by eye.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
@@ -14,7 +14,7 @@ from dispatchzero.services.photo import make_test_jpeg, save_thumbnail
 
 
 def _make_capture(tmp_path: Path) -> Path:
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     photo_path = tmp_path / "captures" / "x.jpg"
     save_thumbnail(raw, photo_path, max_dim=600, quality=70)
     return photo_path

@@ -41,7 +41,7 @@ async def _seed_completion(db_session, tmp_path, *, style: str = "agency"):
     await db_session.refresh(mission)
 
     # Synthesize a saved capture photo so the card endpoint can regenerate.
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     photo_path = tmp_path / "captures" / "x.jpg"
     save_thumbnail(raw, photo_path, max_dim=600, quality=70)
 

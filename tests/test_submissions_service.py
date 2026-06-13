@@ -52,7 +52,7 @@ def _photo_with_gps(
     from PIL import Image
 
     if captured_at is None:
-        captured_at = datetime.utcnow()
+        captured_at = datetime.now(timezone.utc)
 
     def _to_dms(value: float) -> tuple:
         v = abs(value)
@@ -176,7 +176,7 @@ async def test_create_submission_rejects_invalid_coordinates(
 async def test_create_submission_rejects_stale_photo(db_session, tmp_path, monkeypatch):
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user = await _make_user(db_session)
-    stale_time = datetime.utcnow() - timedelta(hours=2)
+    stale_time = datetime.now(timezone.utc) - timedelta(hours=2)
     with pytest.raises(SubmissionRejectedError, match="old"):
         await create_submission(
             db=db_session, user=user,

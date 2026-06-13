@@ -49,7 +49,7 @@ async def _seed_completions(db_session, tmp_path, *, count: int = 3) -> User:
     await db_session.commit()
     await db_session.refresh(mission)
 
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     photo_path = tmp_path / "captures" / "x.jpg"
     save_thumbnail(raw, photo_path, max_dim=600, quality=70)
 
@@ -185,7 +185,7 @@ async def test_completion_photo_serves_jpeg(
     )
     db_session.add(mission); await db_session.commit(); await db_session.refresh(mission)
 
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     photo_path = tmp_path / "captures" / "real.jpg"
     save_thumbnail(raw, photo_path, max_dim=600, quality=70)
 

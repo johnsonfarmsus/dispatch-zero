@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -41,7 +41,7 @@ async def test_capture_happy_path_persists_completion(db_session, tmp_path, monk
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
 
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     completion = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,
@@ -62,7 +62,7 @@ async def test_capture_rejects_out_of_radius(db_session, tmp_path, monkeypatch):
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
 
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     with pytest.raises(CaptureFailedError, match="out_of_radius"):
         await capture_mission(
             db=db_session, user=user, mission=mission, place=place,
@@ -77,7 +77,7 @@ async def test_capture_rejects_out_of_radius(db_session, tmp_path, monkeypatch):
 async def test_capture_rejects_stale_exif(db_session, tmp_path, monkeypatch):
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
-    old = datetime.utcnow() - timedelta(hours=2)
+    old = datetime.now(timezone.utc) - timedelta(hours=2)
     raw = make_test_jpeg(captured_at=old)
     with pytest.raises(CaptureFailedError, match="stale"):
         await capture_mission(
@@ -93,7 +93,7 @@ async def test_rate_updates_aggregates_on_place_and_mission(
 ):
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     completion = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,
@@ -133,7 +133,7 @@ async def test_auto_retire_fires_on_three_of_five_negatives(
     await db_session.commit()
 
     # Now create a 6th completion and rate it (auto-retire reads last 5)
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     sixth = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,
@@ -173,7 +173,7 @@ async def test_two_unreachable_reports_fast_flag_place(
     assert place_after_one.status == "active"
 
     # Second unreachable from a fresh completion — should fast-flag
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     second = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,
@@ -206,7 +206,7 @@ async def test_one_unreachable_plus_one_not_found_does_not_flag(
     ))
     await db_session.commit()
 
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     second = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,
@@ -230,7 +230,7 @@ async def test_unreachable_reason_persists_on_completion(
 ):
     monkeypatch.setenv("PHOTO_UPLOAD_DIR", str(tmp_path))
     user, place, mission = await _seed(db_session)
-    raw = make_test_jpeg(captured_at=datetime.utcnow())
+    raw = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     completion = await capture_mission(
         db=db_session, user=user, mission=mission, place=place,
         raw_photo=raw,

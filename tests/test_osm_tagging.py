@@ -4,6 +4,7 @@ These have no DB or network dependency — they're the cheapest, highest-payoff
 coverage for the OSM round-trip. They lock in the tag bundles we emit to
 OpenStreetMap so a future edit can't silently change what we publish.
 """
+from dispatchzero.config import get_settings
 from dispatchzero.services import osm_tagging
 
 
@@ -20,6 +21,27 @@ class TestTagsForPublish:
         tags = osm_tagging.tags_for_publish(category="church", place_name="First Pres")
         assert tags["amenity"] == "place_of_worship"
         assert tags["religion"] == "christian"
+
+    def test_church_religion_is_configurable(self, monkeypatch):
+        monkeypatch.setenv("OSM_DEFAULT_RELIGION", "buddhist")
+        get_settings.cache_clear()
+        tags = osm_tagging.tags_for_publish(category="church", place_name="X")
+        assert tags["religion"] == "buddhist"
+
+    def test_church_religion_omitted_when_blank(self, monkeypatch):
+        monkeypatch.setenv("OSM_DEFAULT_RELIGION", "")
+        get_settings.cache_clear()
+        tags = osm_tagging.tags_for_publish(category="church", place_name="X")
+        assert "religion" not in tags
+
+    def test_wp_wiki_tag_uses_configured_language(self, monkeypatch):
+        monkeypatch.setenv("WIKIPEDIA_LANGUAGE", "de")
+        get_settings.cache_clear()
+        tags = osm_tagging.tags_for_publish(
+            category="historic", place_name="Berlin",
+            picker_choice="building", place_osm_type="wp",
+        )
+        assert tags["wikipedia"] == "de:Berlin"
 
     def test_civic_post_office(self):
         tags = osm_tagging.tags_for_publish(category="civic", place_name="Harrington PO")

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dispatchzero.integrations.overpass import OverpassClient, OverpassPlace
 from dispatchzero.integrations.wikidata import WikidataClient
 from dispatchzero.integrations.wikipedia import WikipediaClient, WikipediaPlace
+from dispatchzero.services.place_dedup import DEDUP_RADIUS_M, names_match
 from dispatchzero.models import (
     Place,
     PlaceCategory,
@@ -264,7 +265,45 @@ async def _upsert_overpass_place(
     return (await db.execute(select(Place).where(Place.id == place_id))).scalar_one()
 
 
+async def _find_cross_source_duplicate(
+    db: AsyncSession, *, lat: float, lng: float, name: str,
+) -> Place | None:
+    """Find an existing NON-Wikipedia place within DEDUP_RADIUS_M whose name
+    strongly matches `name`. Used to avoid creating a wp duplicate of a place
+    already ingested from OSM. Conservative name matching (place_dedup)."""
+    if not name:
+        return None
+    # Wrap the point literal in ST_GeogFromText so PostGIS sees both args as
+    # geography (a bare string binds as VARCHAR and ST_DWithin has no
+    # geography/varchar overload). Mirrors _ingest_overpass above.
+    target = func.ST_GeogFromText(f"SRID=4326;POINT({lng} {lat})")
+    rows = (
+        await db.execute(
+            select(Place)
+            .where(
+                Place.osm_type != "wp",
+                func.ST_DWithin(Place.coordinates, target, DEDUP_RADIUS_M),
+            )
+            .limit(10)
+        )
+    ).scalars().all()
+    for candidate in rows:
+        if candidate.name and names_match(candidate.name, name):
+            return candidate
+    return None
+
+
 async def _upsert_wikipedia_place(db: AsyncSession, wpp: WikipediaPlace) -> Place:
+    # Cross-source dedup: if this Wikipedia landmark is already in the DB
+    # from an OSM tier (same real place, different source), reuse that row
+    # instead of creating a wp duplicate. Wikipedia runs after the OSM tiers
+    # so the OSM equivalent is usually already present.
+    existing = await _find_cross_source_duplicate(
+        db, lat=wpp.lat, lng=wpp.lng, name=wpp.title,
+    )
+    if existing is not None:
+        return existing
+
     category = _classify_wikipedia(wpp.title, wpp.extract or "")
     tags = {"source": "wikipedia", "title": wpp.title}
 

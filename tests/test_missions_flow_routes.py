@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -66,7 +66,7 @@ async def test_full_flow_request_capture_rate(
         assert r2.status_code == 204
 
         # 3) capture
-        photo_bytes = make_test_jpeg(captured_at=datetime.utcnow())
+        photo_bytes = make_test_jpeg(captured_at=datetime.now(timezone.utc))
         r3 = await client.post(
             f"/missions/{mission_id}/capture",
             files={"photo": ("p.jpg", photo_bytes, "image/jpeg")},
@@ -149,7 +149,7 @@ async def test_capture_returns_422_for_out_of_radius(
     )
     db_session.add(mission); await db_session.commit(); await db_session.refresh(mission)
 
-    photo_bytes = make_test_jpeg(captured_at=datetime.utcnow())
+    photo_bytes = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     r = await client.post(
         f"/missions/{mission.id}/capture",
         files={"photo": ("p.jpg", photo_bytes, "image/jpeg")},
@@ -162,7 +162,7 @@ async def test_capture_returns_422_for_out_of_radius(
 @pytest.mark.asyncio
 async def test_capture_requires_auth(client, db_session, redis_client):
     client.cookies.clear()
-    photo_bytes = make_test_jpeg(captured_at=datetime.utcnow())
+    photo_bytes = make_test_jpeg(captured_at=datetime.now(timezone.utc))
     r = await client.post(
         "/missions/00000000-0000-0000-0000-000000000000/capture",
         files={"photo": ("p.jpg", photo_bytes, "image/jpeg")},

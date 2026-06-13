@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from dispatchzero.admin.routes import router as admin_router
 from dispatchzero.auth.routes import router as auth_router
+from dispatchzero.badges.routes import router as badges_router
 from dispatchzero.config import get_settings
 from dispatchzero.db import get_engine
 from dispatchzero.missions.routes import router as missions_router
@@ -27,6 +28,7 @@ app.include_router(missions_router)
 app.include_router(share_router)
 app.include_router(submissions_router)
 app.include_router(admin_router)
+app.include_router(badges_router)
 
 
 @app.get("/healthz")

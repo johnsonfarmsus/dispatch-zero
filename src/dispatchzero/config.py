@@ -98,6 +98,19 @@ class Settings(BaseSettings):
     # OSM app: redirect_uri value goes through verbatim.
     osm_redirect_uri: str = "https://dispatchzero.ataary.com/admin/osm/callback"
 
+    # ---- Localization / data-source defaults ----
+    # These parameterize US-centric defaults so non-US self-hosters aren't
+    # blocked by hardcoded assumptions. UI + briefings remain English; this
+    # is about which slice of the open data the discovery engine reads.
+    #
+    # Wikipedia geosearch + extract language. Drives both the API host
+    # (<lang>.wikipedia.org) and the wikipedia= OSM tag prefix.
+    wikipedia_language: str = "en"
+    # Default religion= tag when publishing a place_of_worship to OSM. Rural
+    # US coverage is overwhelmingly Christian; set to "" to omit the tag and
+    # let OSM mappers fill it, or to another value for a different region.
+    osm_default_religion: str = "christian"
+
 
 @lru_cache
 def get_settings() -> Settings:

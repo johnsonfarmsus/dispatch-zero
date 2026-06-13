@@ -15,11 +15,11 @@ const _STATUS_BADGE = {
 };
 
 export async function history() {
-  // Fetch both endpoints in parallel. A failure on either still surfaces what
-  // we have from the other.
-  const [missions, submissions] = await Promise.all([
+  // Fetch in parallel. A failure on any still surfaces what we have.
+  const [missions, submissions, badges] = await Promise.all([
     api.get("/missions/completions"),
     api.get("/submissions"),
+    api.get("/badges"),
   ]);
 
   if (!missions.ok && !submissions.ok) {
@@ -39,10 +39,11 @@ export async function history() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "dossier"),
     ),
-    el("div", { class: "content stack" },
+    el("div", { class: "content stack scrollable" },
       el("div", { class: "subtitle" }, "DOSSIER"),
       el("div", { class: "title", style: { fontSize: "var(--t-xl)" } },
         `${items.length} entr${items.length === 1 ? "y" : "ies"} on file`),
+      badges.ok ? badgesSection(badges.data) : null,
       el("div", { class: "divider" }),
       list,
     ),
@@ -164,5 +165,79 @@ function _errorScreen(title, msg) {
                 style: { textAlign: "center", padding: "var(--s-2)" } },
         "← Back to Home"),
     ),
+  );
+}
+
+
+// Badge collection — a collapsible grid showing earned badges bright and
+// locked ones dimmed with a small progress count. Computed server-side from
+// completion history (GET /badges). Collapsed by default so it doesn't push
+// the dossier list down; the summary line ("Badges 4/14") is the toggle.
+function badgesSection(data) {
+  if (!data || !Array.isArray(data.badges) || data.badges.length === 0) {
+    return null;
+  }
+  const grid = el("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+      gap: "var(--s-2)",
+      marginTop: "var(--s-2)",
+    },
+  }, ...data.badges.map(badgeChip));
+
+  // Collapsed by default.
+  grid.style.display = "none";
+  let open = false;
+
+  const caret = el("span", { class: "muted mono", style: { fontSize: "var(--t-xs)" } }, "▸");
+  const toggle = el("button", {
+    style: {
+      width: "100%", textAlign: "left", display: "flex",
+      justifyContent: "space-between", alignItems: "center",
+      border: "1px solid var(--surface-rule)", borderRadius: "var(--r-sm)",
+      padding: "var(--s-2) var(--s-3)", background: "var(--surface-raised)",
+    },
+  },
+    el("span", { class: "subtitle", style: { color: "var(--text)" } }, "Badges"),
+    el("span", { class: "row", style: { gap: "var(--s-2)", alignItems: "center" } },
+      el("span", { class: "code", style: { fontSize: "var(--t-sm)" } },
+        `${data.earned_count}/${data.total_count}`),
+      caret,
+    ),
+  );
+  toggle.addEventListener("click", () => {
+    open = !open;
+    grid.style.display = open ? "grid" : "none";
+    caret.textContent = open ? "▾" : "▸";
+  });
+
+  return el("div", { style: { marginTop: "var(--s-3)" } }, toggle, grid);
+}
+
+function badgeChip(b) {
+  const pct = b.target > 0 ? Math.min(100, Math.round((b.current / b.target) * 100)) : 0;
+  return el("div", {
+    style: {
+      textAlign: "center",
+      padding: "var(--s-2)",
+      border: `1px solid ${b.earned ? "var(--accent)" : "var(--surface-rule)"}`,
+      borderRadius: "var(--r-sm)",
+      background: b.earned ? "var(--surface-raised)" : "transparent",
+      opacity: b.earned ? "1" : "0.6",
+    },
+    title: b.description,
+  },
+    el("div", {
+      class: "subtitle",
+      style: {
+        color: b.earned ? "var(--accent)" : "var(--text-muted)",
+        fontSize: "var(--t-xs)", lineHeight: "1.2",
+      },
+    }, b.name),
+    el("div", {
+      class: "mono",
+      style: { fontSize: "var(--t-xs)", color: "var(--text-faint)", marginTop: "2px" },
+    }, b.earned ? "✓ earned" : `${b.current}/${b.target}`),
   );
 }
