@@ -2,15 +2,7 @@ import { el } from "../dom.js";
 import { api } from "../api.js";
 import { getUser, setUser, clearUser } from "../state.js";
 import { navigate } from "../router.js";
-import { STYLE_META } from "../style-meta.js";
-
-// Short, viewport-friendly taglines per org. The longer prose lives in
-// STYLE_META.tone; this picker stays terse so the screen fits without scroll.
-const TAGLINES = {
-  pulp: "Warm, curious, expedition energy.",
-  agency: "Cold, classified, professional.",
-  guild: "Ancient, ceremonial, formal.",
-};
+import { STYLE_META, TAGLINES } from "../style-meta.js";
 
 export function stylePicker() {
   const user = getUser();

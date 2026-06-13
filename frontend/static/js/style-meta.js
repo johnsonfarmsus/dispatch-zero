@@ -74,6 +74,16 @@ export const STYLE_META = {
   },
 };
 
+// Short, viewport-friendly taglines per org. The longer prose lives in
+// STYLE_META.tone; these stay terse for the selectable org cards on both the
+// Settings (style picker) and Signup screens — single source of truth so the
+// two screens can't drift.
+export const TAGLINES = {
+  pulp: "Warm, curious, expedition energy.",
+  agency: "Cold, classified, professional.",
+  guild: "Ancient, ceremonial, formal.",
+};
+
 export function styleMeta(style) {
   return STYLE_META[style] || STYLE_META.agency;
 }
