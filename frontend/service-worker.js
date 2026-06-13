@@ -4,7 +4,7 @@
 // bug where a deploy added new routes but old `app.js` was served from the
 // SW cache, breaking navigation. JS is fetched fresh every load; the browser
 // HTTP cache still helps repeat-load speed.
-const SHELL_CACHE = "dz-shell-v19";
+const SHELL_CACHE = "dz-shell-v20";
 const SHELL_FILES = [
   "/static/css/tokens.css",
   "/static/css/layout.css",

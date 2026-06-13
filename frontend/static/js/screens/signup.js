@@ -29,18 +29,26 @@ export function signup() {
     }
   }
 
+  // Compact single-line org cards: org name + tagline on one row, tight
+  // padding. Same names + taglines as Settings, but laid out to fit the
+  // signup screen (which also carries the callsign + passphrase fields)
+  // WITHOUT scrolling.
   function orgCard(s) {
     const meta = STYLE_META[s];
     const btn = el("button", {
       type: "button",
       style: {
-        textAlign: "left", padding: "var(--s-3)",
-        display: "flex", flexDirection: "column", gap: "2px",
+        textAlign: "left",
+        padding: "var(--s-2) var(--s-3)",
+        display: "flex", alignItems: "baseline", gap: "var(--s-2)",
+        flexWrap: "wrap",
       },
     },
-      el("span", { class: "subtitle" }, meta.org),
-      el("span", { style: { color: "var(--text)", fontSize: "var(--t-sm)" } },
-        TAGLINES[s] || ""),
+      el("span", { class: "subtitle", style: { flex: "0 0 auto" } }, meta.org),
+      el("span", {
+        class: "muted",
+        style: { fontSize: "var(--t-xs)", lineHeight: "1.2" },
+      }, TAGLINES[s] || ""),
     );
     btn.addEventListener("click", () => {
       selectedStyle = s;
@@ -58,14 +66,14 @@ export function signup() {
       el("span", {}, "// dispatch zero //"),
       el("span", { class: "muted" }, "application"),
     ),
-    el("div", { class: "content stack scrollable" },
-      el("div", { class: "title" }, "Apply for Field Status"),
-      el("div", { class: "muted" },
-        "Choose a callsign and a passphrase. The Archive does not issue replacements. Memorize what you set here.",
-      ),
+    el("div", { class: "content stack", style: { gap: "var(--s-2)" } },
+      el("div", { class: "title", style: { fontSize: "var(--t-xl)" } },
+        "Apply for Field Status"),
+      el("div", { class: "muted", style: { fontSize: "var(--t-sm)" } },
+        "No replacements are issued. Memorize what you set."),
       el("div", { class: "field" }, el("label", {}, "Callsign"), callsign),
       el("div", { class: "field" }, el("label", {}, "Passphrase"), password),
-      el("div", { class: "subtitle", style: { marginTop: "var(--s-2)" } }, "Organization"),
+      el("div", { class: "subtitle" }, "Organization"),
       ...orgButtons,
       errEl,
     ),
