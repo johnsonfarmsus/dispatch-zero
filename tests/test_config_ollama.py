@@ -19,6 +19,7 @@ def test_ollama_settings_have_sensible_defaults(monkeypatch):
     # where someone runs the app directly (no docker, no .env).
     assert s.ollama_base_url == "http://localhost:11434/v1"
     assert s.ollama_model == "olmo2:13b"
-    # Bumped from 15s to 60s when production switched to self-hosted OLMo 2 —
-    # a slow inference box can take 15-40s per briefing and 15s was clipping it.
-    assert s.ollama_timeout_seconds == 60
+    # 15s -> 60s when production switched to self-hosted OLMo 2, then 60s -> 120s
+    # because the shared GPU box can evict the model and pay a reload (~10-30s)
+    # on top of a 25-40s briefing — 60s was surfacing as spurious 503s.
+    assert s.ollama_timeout_seconds == 120
