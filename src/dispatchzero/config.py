@@ -36,12 +36,14 @@ class Settings(BaseSettings):
     # Cloud fallback (paid): set OLLAMA_BASE_URL=https://ollama.com/v1 +
     # OLLAMA_MODEL=gemma4:31b-cloud + a real OLLAMA_API_KEY.
     #
-    # Timeout is generous (60s) — a slow inference box can take 25-40s per
-    # briefing and 15s was clipping it.
+    # Timeout is generous (120s). A slow inference box takes 25-40s per
+    # briefing, and when the GPU is shared the model can be evicted between
+    # requests — a cold call then pays a reload (~10-30s) on top, which was
+    # blowing past a 60s ceiling and surfacing as a spurious 503.
     ollama_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "olmo2:13b"
-    ollama_timeout_seconds: int = 60
+    ollama_timeout_seconds: int = 120
 
     # Photo capture and verification
     photo_upload_dir: str = "/uploads"

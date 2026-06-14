@@ -151,6 +151,10 @@ async def generate(
     except MissionGenerationError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        log.warning(
+            "generate failed (place=%s user=%s): %s",
+            payload.place_id, user.id, e,
+        )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
@@ -254,6 +258,10 @@ async def request_mission(
     except MissionGenerationError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        log.warning(
+            "request generation failed (place=%s user=%s): %s",
+            place_id, user.id, e,
+        )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
@@ -375,6 +383,13 @@ async def accept_candidate(
     except MissionGenerationError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+        # Log the REAL cause (Ollama timeout/transport/validation) — the
+        # 503 the client gets is intentionally generic, but the operator
+        # needs the underlying reason to diagnose.
+        log.warning(
+            "candidate accept generation failed (place=%s user=%s): %s",
+            payload.place_id, user.id, e,
+        )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "the dispatch line is unreliable, agent — try again",
