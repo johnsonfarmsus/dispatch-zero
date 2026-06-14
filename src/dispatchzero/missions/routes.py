@@ -37,6 +37,7 @@ from dispatchzero.services.candidates import (
     gather_candidate_places,
 )
 from dispatchzero.services.cards import compose_mission_card
+from dispatchzero.services.personalize import personalize_operative
 from dispatchzero.services.discovery import discover_nearby
 from dispatchzero.services.rank import completions_to_rank, stats_at_completion
 from dispatchzero.services.mission_flow import (
@@ -76,9 +77,12 @@ async def _place_lat_lng(db: AsyncSession, place_id: uuid.UUID) -> tuple[float, 
 
 
 async def _mission_to_out(
-    db: AsyncSession, mission: Mission, place: Place
+    db: AsyncSession, mission: Mission, place: Place, viewer_callsign: str
 ) -> MissionOut:
     lat, lng = await _place_lat_lng(db, place.id)
+    # Briefings are shared/cached across users and store the operative as a
+    # placeholder token; swap in THIS viewer's call sign on the way out so the
+    # dispatch reads as theirs and never leaks the original generator's name.
     return MissionOut(
         id=mission.id,
         place_id=mission.place_id,
@@ -91,11 +95,11 @@ async def _mission_to_out(
             lng=lng,
         ),
         adventure_style=mission.adventure_style,
-        dispatch_summary=mission.dispatch_summary,
-        briefing_text=mission.briefing_text,
-        clue=mission.clue,
+        dispatch_summary=personalize_operative(mission.dispatch_summary, viewer_callsign),
+        briefing_text=personalize_operative(mission.briefing_text, viewer_callsign),
+        clue=personalize_operative(mission.clue, viewer_callsign),
         badge_framing=mission.badge_framing,
-        teaser=mission.teaser,
+        teaser=personalize_operative(mission.teaser, viewer_callsign),
         audio_url=mission.audio_url,
         ai_model=mission.ai_model,
         status=mission.status,
@@ -160,7 +164,7 @@ async def generate(
             "the dispatch line is unreliable, agent — try again",
         ) from e
     place = await _fetch_place(db, mission.place_id)
-    return await _mission_to_out(db, mission, place)
+    return await _mission_to_out(db, mission, place, user.callsign)
 
 
 # Tiered fallback for /missions/request — try increasingly permissive searches
@@ -267,7 +271,7 @@ async def request_mission(
             "the dispatch line is unreliable, agent — try again",
         ) from e
     place = await _fetch_place(db, mission.place_id)
-    return await _mission_to_out(db, mission, place)
+    return await _mission_to_out(db, mission, place, user.callsign)
 
 
 # ----- candidate-choice flow -----
@@ -395,7 +399,7 @@ async def accept_candidate(
             "the dispatch line is unreliable, agent — try again",
         ) from e
     place = await _fetch_place(db, mission.place_id)
-    return await _mission_to_out(db, mission, place)
+    return await _mission_to_out(db, mission, place, user.callsign)
 
 
 # History dossier — list of the user's recent completions and the per-completion
@@ -506,7 +510,7 @@ async def get_mission(
     if mission is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "mission not found")
     place = await _fetch_place(db, mission.place_id)
-    return await _mission_to_out(db, mission, place)
+    return await _mission_to_out(db, mission, place, user.callsign)
 
 
 @router.post("/{mission_id}/accept", status_code=status.HTTP_204_NO_CONTENT)

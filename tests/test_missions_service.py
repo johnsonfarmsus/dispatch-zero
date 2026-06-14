@@ -123,7 +123,7 @@ def test_build_mission_prompt_no_repeat_omits_followup_framing():
     """First-visit briefings shouldn't carry follow-up framing in the prompt
     — would confuse the model into pretending the operative has been there."""
     msgs = build_mission_prompt(
-        style="agency", callsign="Solo", place_name="X", place_category="historic",
+        style="agency", place_name="X", place_category="historic",
         place_description=None, repeat_visit=False,
     )
     user_msg = msgs[-1]["content"]
@@ -134,7 +134,7 @@ def test_build_mission_prompt_no_repeat_omits_followup_framing():
 def test_build_mission_prompt_repeat_includes_followup_framing():
     """Repeat-visit briefings get explicit follow-up framing in the prompt."""
     msgs = build_mission_prompt(
-        style="agency", callsign="Solo", place_name="X", place_category="historic",
+        style="agency", place_name="X", place_category="historic",
         place_description=None, repeat_visit=True,
     )
     user_msg = msgs[-1]["content"]

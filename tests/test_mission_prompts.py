@@ -1,21 +1,23 @@
 import pytest
 
 from dispatchzero.services.mission_prompts import build_mission_prompt
+from dispatchzero.services.personalize import OPERATIVE_TOKEN
 
 
 def _ctx():
     return dict(
-        callsign="Trevor_01",
         place_name="Garbage Goat",
         place_category="sculpture",
         place_description=None,
     )
 
 
-def test_pulp_prompt_mentions_pulp_style_cues_and_callsign():
+def test_pulp_prompt_mentions_pulp_style_cues_and_operative_token():
     msgs = build_mission_prompt(style="pulp", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    assert "Trevor_01" in text
+    # The operative is addressed via a placeholder token, never a real call
+    # sign — that's what keeps shared/cached briefings from leaking names.
+    assert OPERATIVE_TOKEN in text
     assert "Garbage Goat" in text
     assert any(w in text.lower() for w in ("expedition", "field", "dispatch"))
     # Persona names appear only as negations in the JSON contract — not as character names
@@ -27,15 +29,23 @@ def test_pulp_prompt_mentions_pulp_style_cues_and_callsign():
 def test_agency_prompt_uses_clinical_register():
     msgs = build_mission_prompt(style="agency", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    assert "Trevor_01" in text
+    assert OPERATIVE_TOKEN in text
     assert any(w in text.lower() for w in ("classified", "operative", "asset", "directive"))
 
 
 def test_guild_prompt_uses_ceremonial_register():
     msgs = build_mission_prompt(style="guild", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    assert "Trevor_01" in text
+    assert OPERATIVE_TOKEN in text
     assert any(w in text.lower() for w in ("guild", "ancient", "rite", "ceremony"))
+
+
+def test_prompt_never_contains_a_real_callsign():
+    # Regression guard for the shared-cache name leak: the builder takes no
+    # call sign at all now, so no user identity can reach the model.
+    msgs = build_mission_prompt(style="agency", **_ctx())
+    text = "\n".join(m["content"] for m in msgs)
+    assert "Trevor_01" not in text
 
 
 def test_prompt_demands_json_response_format():
@@ -50,7 +60,6 @@ def test_prompt_demands_json_response_format():
 def test_prompt_includes_description_when_present():
     msgs = build_mission_prompt(
         style="agency",
-        callsign="X",
         place_name="Some Mural",
         place_category="mural",
         place_description="A 1974 fresco depicting the Spokane River.",
@@ -80,7 +89,6 @@ def test_unknown_style_raises():
     with pytest.raises(ValueError):
         build_mission_prompt(
             style="ranger",
-            callsign="X",
             place_name="X",
             place_category="mural",
             place_description=None,

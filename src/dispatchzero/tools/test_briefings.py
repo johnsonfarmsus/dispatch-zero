@@ -95,7 +95,6 @@ async def main(n: int) -> int:
             inp = _TEST_INPUTS[i % len(_TEST_INPUTS)]
             messages = build_mission_prompt(
                 style=inp["style"],
-                callsign=inp["callsign"],
                 place_name=inp["name"],
                 place_category=inp["category"],
                 place_description=None,

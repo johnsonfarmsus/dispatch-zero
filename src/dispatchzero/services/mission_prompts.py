@@ -7,6 +7,8 @@ Briefings are JSON objects with four content fields.
 """
 from typing import Literal
 
+from dispatchzero.services.personalize import OPERATIVE_TOKEN
+
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
 _JSON_CONTRACT = """
@@ -158,13 +160,19 @@ _REPEAT_VISIT_FRAMING = (
 def build_mission_prompt(
     *,
     style: AdventureStyle,
-    callsign: str,
     place_name: str,
     place_category: str,
     place_description: str | None,
     repeat_visit: bool = False,
 ) -> list[dict[str, str]]:
     """Return OpenAI-compatible messages list for the chat-completions endpoint.
+
+    The operative is NOT named here. Briefings are cached and shared across
+    users, so we never put a real call sign in the generated text — the model
+    addresses the operative with the OPERATIVE_TOKEN placeholder, and the read
+    surfaces substitute the viewer's call sign (see services.personalize). This
+    is what stops one user's call sign from leaking into another user's cached
+    briefing.
 
     `repeat_visit=True` adds follow-up framing — the briefing acknowledges
     the operative has been here before. Pass this when the user has any
@@ -186,10 +194,14 @@ def build_mission_prompt(
     repeat_line = _REPEAT_VISIT_FRAMING if repeat_visit else ""
 
     user = (
-        f"Issue a mission to operative {callsign}.\n\n"
+        f"Issue a mission to the operative.\n\n"
         f"Target: {place_name} (category: {place_category}).{description_line}\n\n"
         f"The operative will travel there, photograph it as proof, and return. "
-        f"Address {callsign} directly. Make the briefing feel like an assignment "
+        f"Address the operative directly. Whenever you name or address them, use "
+        f"the EXACT token {OPERATIVE_TOKEN} (with the curly braces), e.g. "
+        f"'Operative {OPERATIVE_TOKEN},' or '{OPERATIVE_TOKEN}, your task is...'. "
+        f"NEVER invent a name and NEVER write an actual call sign — only the "
+        f"{OPERATIVE_TOKEN} token. Make the briefing feel like an assignment "
         f"with stakes: cryptic, in-character, with the operative's task front "
         f"and centre.\n\n"
         f"DO NOT write a history of the target. Do not state when it was built, "

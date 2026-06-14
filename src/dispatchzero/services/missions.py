@@ -111,7 +111,6 @@ async def get_or_generate_mission(
     try:
         messages = build_mission_prompt(
             style=style,
-            callsign=user.callsign,
             place_name=place.name or "an unnamed place",
             place_category=place.category,
             place_description=place.description,
