@@ -12,9 +12,13 @@ not 1000s).
 Atomic via INCR (returns post-increment count) + EXPIRE (idempotent — only
 sets TTL if not already set).
 """
+import logging
 import time
 
 import redis.asyncio as aioredis
+from redis.exceptions import RedisError
+
+log = logging.getLogger(__name__)
 
 
 class RateLimitExceeded(RuntimeError):
@@ -42,13 +46,25 @@ async def check_and_increment(
     bucket = now // window_seconds
     key = f"rl:{scope}:{identifier}:{bucket}"
 
-    async with redis.pipeline(transaction=True) as pipe:
-        pipe.incr(key)
-        # NX: only stamp the TTL on first INCR. Without it, plain EXPIRE
-        # resets the TTL on every call, leaving stale bucket keys alive
-        # longer than necessary. Matches LoginRateLimiter's pattern.
-        pipe.expire(key, window_seconds, nx=True)
-        results = await pipe.execute()
+    try:
+        async with redis.pipeline(transaction=True) as pipe:
+            pipe.incr(key)
+            # NX: only stamp the TTL on first INCR. Without it, plain EXPIRE
+            # resets the TTL on every call, leaving stale bucket keys alive
+            # longer than necessary. Matches LoginRateLimiter's pattern.
+            pipe.expire(key, window_seconds, nx=True)
+            results = await pipe.execute()
+    except RedisError as e:
+        # Fail OPEN. The limiter is an availability guard, not a correctness
+        # one — if Redis is unreachable or refusing writes (e.g. MISCONF when
+        # the host disk is full), enforcing the cap would take the whole
+        # feature down with a 500. Allow the call through and log loudly so
+        # the underlying Redis problem still gets noticed and fixed.
+        log.warning(
+            "rate limiter degraded (scope=%s id=%s): allowing request, Redis error: %s",
+            scope, identifier, e,
+        )
+        return
 
     count = int(results[0])
     if count > max_count:
