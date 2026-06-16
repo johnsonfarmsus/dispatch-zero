@@ -1,40 +1,62 @@
-"""Operative call-sign tokenization.
+"""Operative-address cleanup for cached briefings.
 
-Briefings are cached and SHARED across users (the library cache in
-services.missions returns one Mission row per place+style to everyone). So the
-operative's call sign must never be baked into the stored briefing text — if it
-were, the first generator's call sign would leak to every later viewer.
+Briefings are cached and SHARED across users (the library cache returns one
+anonymous Mission row per place+style to everyone). Earlier regimes tried to
+personalize the briefing with the viewer's call sign: first by baking it into
+the text (which leaked one user's name to the next), then via a {operative}
+placeholder the model was told to emit. Small models mangled that placeholder
+into things like `{}` (which rendered as a literal "Operative {}, ..."), and the
+forced word "operative" read wrong in the non-spy organizations (The Guild, The
+Archive).
 
-Instead the model writes a placeholder token wherever it addresses the
-operative, and we substitute the *viewing* operative's call sign at every read
-surface. This keeps briefings personalized without coupling the cached text to
-one user. It mirrors the code-controlled sign-off: identity is owned by code,
-not the model.
+So briefings no longer name the operative at all. The prompt now writes in the
+second person, and the player's call sign appears only where it is code-rendered
+and reliable: the mission card header, ranks, and the dossier.
 
-The "viewing operative" differs by surface:
-  - live dispatch (services.missions / _mission_to_out): the requesting user
-  - mission card (capture, history, public share): the COMPLETER
+This module is the cleanup safety net for briefings generated under the old
+regimes that are still cached or sitting in someone's history. It strips any
+leftover placeholder token and the vocative built around it, so nothing ever
+renders as "{}" or a stale "{operative}". Text with no such artifact passes
+through untouched, so every current briefing is a no-op.
 """
 import re
 
-# The literal token the model is told to emit wherever it would name or address
-# the operative. Stored verbatim in the cached briefing; substituted on read.
-OPERATIVE_TOKEN = "{operative}"
+# A placeholder/token artifact the old prompt produced: {operative}, {},
+# [operative], < operative >, etc.
+_TOKEN = r"[\{\[<][^\}\]>]*[\}\]>]"
 
-# Render-time matcher. Deliberately forgiving: small models mangle the token
-# into [operative], <operative>, { operative }, {OPERATIVE}, etc. — all of those
-# resolve to the viewer's call sign. A bare word "operative" with no delimiters
-# is left untouched (it's a valid generic address, no name to inject).
-_TOKEN_RE = re.compile(r"[\{\[<]\s*operative\s*[\}\]>]", re.IGNORECASE)
+# Fast gate: only briefings that actually contain a brace/bracket token get
+# rewritten. Everything else (every briefing generated under the current prompt)
+# returns unchanged, so well-formed text is never touched.
+_HAS_TOKEN_RE = re.compile(_TOKEN)
+
+# The token plus the vocative scaffolding around it: an optional leading role
+# word and a trailing comma. Matches "Operative {}, ", "{operative}, ", and a
+# bare "{operative}".
+_VOCATIVE_RE = re.compile(
+    r"(?:\b(?:Operative|Agent|Warden|Asset|Acolyte)\s+)?" + _TOKEN + r"\s*,?\s*",
+    re.IGNORECASE,
+)
 
 
-def personalize_operative(text: str | None, callsign: str) -> str | None:
-    """Replace the operative placeholder token with `callsign`.
+def clean_operative_address(text: str | None) -> str | None:
+    """Strip leftover {operative}-style placeholders (and the vocative built
+    around them) from an old-regime briefing.
 
-    Idempotent and safe on text that has no token (returns it unchanged), so it
-    can be applied unconditionally at every output surface — including old
-    pre-token briefings, which simply pass through.
+    No-op on text without a token artifact, so all current briefings pass
+    straight through untouched.
     """
-    if not text:
+    if not text or _HAS_TOKEN_RE.search(text) is None:
         return text
-    return _TOKEN_RE.sub(callsign, text)
+    out = _VOCATIVE_RE.sub("", text)
+    # Tidy the seams a removed vocative leaves behind.
+    out = re.sub(r"\s+([,;:.])", r"\1", out)      # " ," -> ","
+    out = re.sub(r"[ \t]{2,}", " ", out)           # collapse runs of spaces
+    out = re.sub(r"^[\s,;:.\-]+", "", out)          # leading punctuation/space
+    # Recapitalize sentence starts we may have lowercased by removing a vocative.
+    out = re.sub(
+        r"(^|[.!?]\s+)([a-z])",
+        lambda m: m.group(1) + m.group(2).upper(),
+        out,
+    )
+    return out.strip()

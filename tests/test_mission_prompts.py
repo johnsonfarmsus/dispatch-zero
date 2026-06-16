@@ -1,7 +1,6 @@
 import pytest
 
 from dispatchzero.services.mission_prompts import build_mission_prompt
-from dispatchzero.services.personalize import OPERATIVE_TOKEN
 
 
 def _ctx():
@@ -12,15 +11,13 @@ def _ctx():
     )
 
 
-def test_pulp_prompt_mentions_pulp_style_cues_and_operative_token():
+def test_pulp_prompt_mentions_pulp_style_cues():
     msgs = build_mission_prompt(style="pulp", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    # The operative is addressed via a placeholder token, never a real call
-    # sign — that's what keeps shared/cached briefings from leaking names.
-    assert OPERATIVE_TOKEN in text
     assert "Garbage Goat" in text
     assert any(w in text.lower() for w in ("expedition", "field", "dispatch"))
-    # Persona names appear only as negations in the JSON contract — not as character names
+    # Persona names appear only as negations in the JSON contract, not as
+    # character names.
     assert text.count("Vale") <= 1
     assert text.count("Ashford") <= 1
     assert text.count("Warden") <= 1
@@ -29,23 +26,24 @@ def test_pulp_prompt_mentions_pulp_style_cues_and_operative_token():
 def test_agency_prompt_uses_clinical_register():
     msgs = build_mission_prompt(style="agency", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    assert OPERATIVE_TOKEN in text
     assert any(w in text.lower() for w in ("classified", "operative", "asset", "directive"))
 
 
 def test_guild_prompt_uses_ceremonial_register():
     msgs = build_mission_prompt(style="guild", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
-    assert OPERATIVE_TOKEN in text
     assert any(w in text.lower() for w in ("guild", "ancient", "rite", "ceremony"))
 
 
-def test_prompt_never_contains_a_real_callsign():
-    # Regression guard for the shared-cache name leak: the builder takes no
-    # call sign at all now, so no user identity can reach the model.
-    msgs = build_mission_prompt(style="agency", **_ctx())
+def test_prompt_addresses_in_second_person_without_a_name_or_token():
+    # The briefing must not bake in a name or a placeholder token (both leaked
+    # or rendered as a raw "{}" before). It is written in the second person.
+    msgs = build_mission_prompt(style="guild", **_ctx())
     text = "\n".join(m["content"] for m in msgs)
+    assert "{operative}" not in text
     assert "Trevor_01" not in text
+    assert "second person" in text.lower()
+    assert "your" in text.lower()
 
 
 def test_prompt_demands_json_response_format():

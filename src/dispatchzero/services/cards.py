@@ -34,7 +34,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from dispatchzero.services.personalize import personalize_operative
+from dispatchzero.services.personalize import clean_operative_address
 from dispatchzero.services.rank import HANDLER_NAMES, ORG_NAMES, rank_name
 
 # 4:5 portrait. Friendly to social feeds (1080×1350 is Instagram portrait).
@@ -317,10 +317,11 @@ def compose_mission_card(
     )
 
     # ----- Flavor band: dispatch summary + sign-off -----
-    # The summary stores the operative as a placeholder token (briefings are
-    # shared/cached); render it as THIS card-owner's call sign.
+    # The card-owner's call sign is already shown in the header; the summary
+    # itself doesn't name the reader. clean_operative_address only strips a
+    # leftover {operative}/{} placeholder from old-regime summaries.
     flavor_top = title_bottom
-    flavor_text = (personalize_operative(dispatch_summary, callsign) or "").strip()
+    flavor_text = (clean_operative_address(dispatch_summary) or "").strip()
     flavor_font = _font(_FONT_REGULAR, 26)
     sign_font = _font(_FONT_REGULAR, 22)
 

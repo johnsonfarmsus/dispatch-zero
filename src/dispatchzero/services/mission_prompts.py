@@ -7,8 +7,6 @@ Briefings are JSON objects with four content fields.
 """
 from typing import Literal
 
-from dispatchzero.services.personalize import OPERATIVE_TOKEN
-
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
 _JSON_CONTRACT = """
@@ -167,14 +165,15 @@ def build_mission_prompt(
 ) -> list[dict[str, str]]:
     """Return OpenAI-compatible messages list for the chat-completions endpoint.
 
-    The operative is NOT named here. Briefings are cached and shared across
-    users, so we never put a real call sign in the generated text — the model
-    addresses the operative with the OPERATIVE_TOKEN placeholder, and the read
-    surfaces substitute the viewer's call sign (see services.personalize). This
-    is what stops one user's call sign from leaking into another user's cached
-    briefing.
+    The reader is NOT named here. Briefings are cached and shared across users,
+    so the generated text never contains a call sign or any per-user token: the
+    model writes in the second person ("you"), and the player's call sign shows
+    up only where it is code-rendered (the mission card header, ranks, the
+    dossier). This is what stops one user's call sign from leaking into another
+    user's cached briefing, and it keeps the spy-flavored word "operative" out
+    of the ceremonial and expedition voices, where it never fit.
 
-    `repeat_visit=True` adds follow-up framing — the briefing acknowledges
+    `repeat_visit=True` adds follow-up framing: the briefing acknowledges
     the operative has been here before. Pass this when the user has any
     prior completion of the same place (services.missions checks
     user_place_history before calling).
@@ -194,16 +193,14 @@ def build_mission_prompt(
     repeat_line = _REPEAT_VISIT_FRAMING if repeat_visit else ""
 
     user = (
-        f"Issue a mission to the operative.\n\n"
+        f"Issue a field assignment for this target.\n\n"
         f"Target: {place_name} (category: {place_category}).{description_line}\n\n"
-        f"The operative will travel there, photograph it as proof, and return. "
-        f"Address the operative directly. Whenever you name or address them, use "
-        f"the EXACT token {OPERATIVE_TOKEN} (with the curly braces), e.g. "
-        f"'Operative {OPERATIVE_TOKEN},' or '{OPERATIVE_TOKEN}, your task is...'. "
-        f"NEVER invent a name and NEVER write an actual call sign — only the "
-        f"{OPERATIVE_TOKEN} token. Make the briefing feel like an assignment "
-        f"with stakes: cryptic, in-character, with the operative's task front "
-        f"and centre.\n\n"
+        f"The reader will travel there, photograph it as proof, and return. "
+        f"Write directly to them in the second person ('you', 'your'). Do NOT "
+        f"address them by a name, a call sign, a placeholder, or a rank or title "
+        f"of any kind. Do not open with a salutation or vocative at all; just "
+        f"give them the assignment. Make the briefing feel like an assignment "
+        f"with stakes: cryptic, in-character, with the task front and centre.\n\n"
         f"DO NOT write a history of the target. Do not state when it was built, "
         f"who built it, who lived there, or what it is famous for. The operative "
         f"already knows that from their dossier. Use any flavor reference as "
