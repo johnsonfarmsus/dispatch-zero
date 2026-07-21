@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from typing import Literal
@@ -12,6 +13,8 @@ from dispatchzero.integrations.ollama import OllamaClient, OllamaError
 from dispatchzero.models import Mission, MissionStatus, Place, User, UserPlaceHistory
 from dispatchzero.schemas.missions import MissionContent
 from dispatchzero.services.mission_prompts import build_mission_prompt
+
+logger = logging.getLogger(__name__)
 
 AdventureStyle = Literal["pulp", "agency", "guild"]
 
@@ -102,24 +105,36 @@ async def get_or_generate_mission(
             return library_hit
 
     settings = get_settings()
-    client = OllamaClient(
-        api_key=settings.ollama_api_key,
-        base_url=settings.ollama_base_url,
-        model=settings.ollama_model,
-        timeout_seconds=settings.ollama_timeout_seconds,
+    messages = build_mission_prompt(
+        style=style,
+        place_name=place.name or "an unnamed place",
+        place_category=place.category,
+        place_description=place.description,
+        repeat_visit=is_repeat,
     )
+
+    # Availability ladder: primary model, then the smaller fallback (if
+    # configured) when the primary fails for ANY reason — transport error,
+    # eviction-induced 5xx, or unrecoverable output shape. The fallback is
+    # attempted on semantic failures too, deliberately: a differently-sized
+    # model rarely trips the same length caps, and the user having a slightly
+    # plainer briefing beats having no dispatch at all.
     try:
-        messages = build_mission_prompt(
-            style=style,
-            place_name=place.name or "an unnamed place",
-            place_category=place.category,
-            place_description=place.description,
-            repeat_visit=is_repeat,
+        content = await _generate_once(settings, settings.ollama_model, messages)
+        model_used = settings.ollama_model
+    except MissionGenerationError as primary_err:
+        fallback = settings.ollama_fallback_model
+        if not fallback or fallback == settings.ollama_model:
+            raise
+        logger.warning(
+            "primary model %s failed (%s); retrying with fallback model %s",
+            settings.ollama_model,
+            primary_err,
+            fallback,
         )
-        content = await _generate_with_repair(client, messages)
-        content = _ensure_signoff(content, style=style)
-    finally:
-        await client.aclose()
+        content = await _generate_once(settings, fallback, messages)
+        model_used = fallback
+    content = _ensure_signoff(content, style=style)
 
     mission = Mission(
         place_id=place.id,
@@ -129,7 +144,7 @@ async def get_or_generate_mission(
         clue=content.clue,
         badge_framing=content.badge_framing,
         teaser=content.teaser,
-        ai_model=settings.ollama_model,
+        ai_model=model_used,
         repeat_visit=is_repeat,
     )
     db.add(mission)
@@ -183,6 +198,24 @@ def _strip_markdown_fences(s: str) -> str:
     if m:
         return m.group(1)
     return s
+
+
+async def _generate_once(
+    settings, model: str, messages: list[dict[str, str]]
+) -> MissionContent:
+    """Run one full generation attempt (grammar pass + repair retry) against
+    a specific model. Owns the client lifecycle so the primary and fallback
+    attempts in get_or_generate_mission each get a fresh connection."""
+    client = OllamaClient(
+        api_key=settings.ollama_api_key,
+        base_url=settings.ollama_base_url,
+        model=model,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    )
+    try:
+        return await _generate_with_repair(client, messages)
+    finally:
+        await client.aclose()
 
 
 async def _generate_with_repair(

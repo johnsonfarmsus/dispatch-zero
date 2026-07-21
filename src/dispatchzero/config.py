@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     ollama_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "olmo2:13b"
+    # Availability floor for the shared-GPU box: when the primary model fails
+    # (evicted under contention, mid-reload, or persistently erroring), one
+    # retry runs against this smaller model on the same endpoint. olmo2:7b
+    # reloads in seconds where the 13B pays 10-30s, so it usually answers
+    # even while the box is thrashing. Empty string disables the fallback.
+    ollama_fallback_model: str = "olmo2:7b"
     ollama_timeout_seconds: int = 120
 
     # Photo capture and verification

@@ -10,6 +10,7 @@ def test_ollama_settings_have_sensible_defaults(monkeypatch):
     monkeypatch.delenv("OLLAMA_MODEL", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     monkeypatch.delenv("OLLAMA_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("OLLAMA_FALLBACK_MODEL", raising=False)
     s = Settings()
     assert s.ollama_api_key == "test-key"
     # Default points at a locally-running Ollama instance (the canonical
@@ -23,3 +24,6 @@ def test_ollama_settings_have_sensible_defaults(monkeypatch):
     # because the shared GPU box can evict the model and pay a reload (~10-30s)
     # on top of a 25-40s briefing — 60s was surfacing as spurious 503s.
     assert s.ollama_timeout_seconds == 120
+    # Availability floor: when the 13B is evicted/unreachable, one retry runs
+    # against the smaller olmo on the same box (reloads in seconds).
+    assert s.ollama_fallback_model == "olmo2:7b"

@@ -398,8 +398,12 @@ async def test_unknown_place_raises(db_session):
 async def test_malformed_ollama_json_raises_after_repair_retry(db_session, monkeypatch):
     """Two failures in a row (initial + repair retry) surface an error.
     The retry path is exercised — respx.mock returns the wrong-shape payload
-    BOTH times, so we expect MissionGenerationError and 2 calls (not 1)."""
+    BOTH times, so we expect MissionGenerationError and 2 calls (not 1).
+    Fallback ladder is disabled here to test the repair retry in isolation
+    (with it on, the fallback model would add 2 more calls — that composed
+    behavior has its own test in the fallback-ladder section)."""
     monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_FALLBACK_MODEL", "")
     user, place = await _make_user_and_place(db_session)
 
     with respx.mock:
@@ -462,3 +466,97 @@ async def test_default_style_falls_back_to_user_profile(db_session, monkeypatch)
             db=db_session, user=user, place_id=place.id, adventure_style=None
         )
     assert mission.adventure_style == "agency"
+
+
+# ---------- generation fallback ladder ----------
+
+@pytest.mark.asyncio
+async def test_fallback_model_generates_when_primary_errors(db_session, monkeypatch):
+    """Primary model persistently 500s (GPU eviction) -> the smaller fallback
+    model answers, and ai_model records which model actually wrote the brief."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    payload = {
+        "dispatch_summary": "Fallback summary.",
+        "briefing_text": "Fallback briefing.",
+        "clue": None,
+        "badge_framing": None,
+    }
+
+    def route_by_model(request):
+        body = json.loads(request.content)
+        if body["model"] == "olmo2:13b":
+            return httpx.Response(500, text="model evicted")
+        return httpx.Response(200, json=_ollama_response(payload))
+
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            side_effect=route_by_model
+        )
+        mission = await get_or_generate_mission(
+            db=db_session, user=user, place_id=place.id, adventure_style="agency",
+        )
+
+    assert "Fallback" in mission.dispatch_summary
+    assert mission.ai_model == "olmo2:7b"
+
+
+@pytest.mark.asyncio
+async def test_fallback_disabled_surfaces_primary_error(db_session, monkeypatch):
+    """OLLAMA_FALLBACK_MODEL='' turns the ladder off: primary failure raises
+    MissionGenerationError with no second-model attempt."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    monkeypatch.setenv("OLLAMA_FALLBACK_MODEL", "")
+    user, place = await _make_user_and_place(db_session)
+
+    calls = {"n": 0}
+
+    def count_and_fail(request):
+        calls["n"] += 1
+        return httpx.Response(500, text="down")
+
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            side_effect=count_and_fail
+        )
+        with pytest.raises(MissionGenerationError):
+            await get_or_generate_mission(
+                db=db_session, user=user, place_id=place.id, adventure_style="agency",
+            )
+
+    # Transport-level 5xx retry inside OllamaClient may double the count,
+    # but every request must have targeted the PRIMARY model only.
+    assert calls["n"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_fallback_rescues_semantic_failure(db_session, monkeypatch):
+    """Primary returns well-formed HTTP but unusable payload shape (even after
+    the repair retry) -> the fallback still rescues the dispatch."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    user, place = await _make_user_and_place(db_session)
+
+    good_payload = {
+        "dispatch_summary": "Rescued summary.",
+        "briefing_text": "Rescued briefing.",
+        "clue": None,
+        "badge_framing": None,
+    }
+
+    def route_by_model(request):
+        body = json.loads(request.content)
+        if body["model"] == "olmo2:13b":
+            return httpx.Response(200, json=_ollama_response({"nonsense": True}))
+        return httpx.Response(200, json=_ollama_response(good_payload))
+
+    with respx.mock:
+        respx.post("https://ollama.com/v1/chat/completions").mock(
+            side_effect=route_by_model
+        )
+        mission = await get_or_generate_mission(
+            db=db_session, user=user, place_id=place.id, adventure_style="agency",
+        )
+
+    assert "Rescued" in mission.dispatch_summary
+    assert mission.ai_model == "olmo2:7b"
