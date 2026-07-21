@@ -1,6 +1,14 @@
 # Dispatch Zero — Comprehensive Project Document
 
-*Version 4.0 — April 2026*
+*Version 5.0 — June 2026*
+
+> **v5 summary of changes:** TTS is cut (text-only briefings are a product
+> decision, not a gap). The AI stack is a self-hosted OLMo 2 pair (13B primary,
+> 7B availability fallback) on a shared GPU box, not Ollama Cloud. The map view
+> shipped (vendored Leaflet + Carto tiles). New since v4 and now documented:
+> community place submissions with admin review, the USGS GNIS import, OSM
+> publishing with OAuth, the public share page, rank titles, and the log-only
+> watchdog.
 
 ---
 
@@ -10,7 +18,7 @@ This document describes the product vision, technical architecture, game systems
 
 Users complete missions, earn rewards, rate both the location and the mission separately, and build a personal map of completed adventures. The product is designed to feel slightly mysterious, slightly unsettling, and just ambiguous enough that users are never entirely sure whether the organization they work for is benevolent or not.
 
-The app launches as a web-first experience hosted on an existing Hetzner VPS (VPS 2, `89.167.39.152`), using Python with FastAPI, PostgreSQL with PostGIS, public OpenStreetMap-based services for geodata, and a self-hosted open-source text-to-speech layer for handler voices. Total operational cost is approximately $20/month — VPS 2 is sunk cost, with the only paid line being Ollama Cloud.
+The app launches as a web-first experience hosted on an existing Hetzner VPS (VPS 2, `89.167.39.152`), using Python with FastAPI, PostgreSQL with PostGIS, public OpenStreetMap-based services for geodata, and self-hosted OLMo 2 models for briefing generation. Marginal operational cost is approximately $0/month — VPS 2 and the shared GPU inference box are both sunk cost.
 
 ---
 
@@ -95,17 +103,13 @@ Avatars should be created using existing Mistral Medium / Flux credits. Visual d
 
 All three should feel like they are being viewed through frosted glass or inadequate lighting — present but unknowable. The visual consistency across three styles subtly suggests they may all be connected to something larger.
 
-### Handler Voices
+### Handler Voice: Text Only (Decided June 2026)
 
-Each style has a distinct Zero voice delivered via Kokoro-82M TTS, self-hosted on VPS 2.
-
-| Style | Voice Direction |
-|---|---|
-| Pulp | Warm, fast-thinking, lightly enthusiastic |
-| Agency | Cold, clipped, restrained |
-| Guild | Slow, resonant, formal |
-
-Audio is generated server-side when missions are created and cached as files. The same mission briefing is never synthesized twice.
+Zero communicates in text. TTS (previously planned as self-hosted Kokoro-82M)
+is **cut, not deferred**: no synthesis code was ever built, the dangling
+`audio_url` column was dropped in migration 0021, and briefings commit fully
+to the written-dossier form. The written voice differs per style (see prompt
+templates in `services/mission_prompts.py`); that is the voice layer.
 
 ---
 
@@ -221,7 +225,7 @@ The product launches as a mobile-first web application, installable as a PWA whe
 1. User opens the Home screen, their base of operations.
 2. User reviews identity, stats, and recent history.
 3. User requests a mission.
-4. User shares current location or enters ZIP code.
+4. User shares current location (geolocation; ZIP-code entry was descoped).
 5. System finds nearby eligible places.
 6. System filters out places the user has already completed.
 7. AI selects the best candidate and writes the mission briefing in the user's chosen style.
@@ -376,7 +380,7 @@ V1 launches with Scout missions only. The data model supports multi-stop from da
 
 The system never invents a destination. Every mission is built from real geographic data.
 
-1. Convert user location or ZIP to coordinates via Nominatim or Photon.
+1. Take the user's device location (geocoding via Nominatim is cached for place enrichment).
 2. Query nearby places via Overpass API using approved OSM tags.
 3. Normalize results into the internal place schema.
 4. Enrich top candidates with available descriptive context from Wikipedia/Wikidata.
@@ -431,6 +435,62 @@ A submitted verified photo without a rating counts as a soft positive for the lo
 ### No Repeat Locations
 
 Every user has a completed-place history. The system filters out completed places at candidate selection time, before scoring. A user is never sent to the same location twice.
+
+---
+
+## Community Places and the OSM Loop (new since v4)
+
+This subsystem grew out of real usage and is now one of the product's
+distinguishing features: Dispatch Zero doesn't just consume OpenStreetMap —
+it gives back to it.
+
+### Community Submissions
+
+Operatives can report places the map doesn't know about ("Report a site").
+A submission creates a pending Place plus a Submission dossier row and enters
+an admin review queue:
+
+- **Approve** → the place goes live in the dispatch pool, credited to the
+  submitting user (who is treated as a repeat visitor of their own find, so
+  their briefing framing fits).
+- **Return** → the place row is deleted; the submission dossier survives with
+  a `place_name_snapshot` and an in-character returned-note, so the user's
+  history never dangles.
+
+Submissions are rate-limited per user per day, and the admin surface is
+invisible to non-admins (404, not 403).
+
+### GNIS Import
+
+Rural coverage is the weak spot of tag-based OSM discovery. The
+`tools/import_gnis.py` importer loads named cultural features (churches,
+schools, parks, post offices, cemeteries, historic sites) from the USGS GNIS
+Domestic Names dataset — ~6,000 places added in the first pass (see blog:
+"Six Thousand New Targets"). Cross-source dedup (`services/place_dedup.py`)
+merges GNIS/Wikipedia/OSM copies of the same place using significant-token
+name matching, so "Harrington Opera House" and "Opera House, Harrington"
+don't both dispatch.
+
+### Publishing Back to OSM
+
+Approved community submissions that OSM doesn't have can be **published to
+OpenStreetMap** from the admin queue:
+
+- OAuth 2.0 against osm.org; tokens encrypted at rest (Fernet, key derived
+  from the session secret), stored as a single-row credentials table.
+- A **preflight** re-queries Overpass near the candidate to catch anything
+  OSM gained since submission (advisory only, stored as JSONB on the
+  submission).
+- Publishes are capped per day, default **dry-run** in config, and every
+  publish writes an `OsmPublication` audit row (reviewer, tags, coordinates)
+  that survives even if the place or submission is later deleted.
+
+### Public Share Pages
+
+Every verified completion gets an unguessable share token
+(`secrets.token_urlsafe`). `GET /c/{token}` renders a public, no-auth,
+no-JS-required page with the mission card; coordinates are never exposed on
+it. This is the shareable artifact behind the Bluesky/Mastodon links.
 
 ---
 
@@ -491,11 +551,18 @@ A compass-style arrow pointing toward the destination with distance shown. The d
 
 Revealed on user request. Minimal — two markers only (user position and destination), no search, no layer controls, no routing.
 
-### Map Stack
+### Map Stack (shipped June 2026)
 
-- **Leaflet.js** — map rendering library, free and open source.
-- **CartoDB tiles** — free, no API key, production-appropriate.
-- **Custom SVG markers** — one per style, inline, no external dependency.
+- **Leaflet.js 1.9.4** — vendored into `frontend/static/vendor/leaflet/`
+  (no CDN dependency), lazy-imported only when the map screen opens.
+- **CartoDB tiles** — free, no API key, production-appropriate. The one
+  external request the map makes.
+- **Custom SVG markers** — inline `divIcon` SVGs (target pin + user dot)
+  tinted with the style accent; the default Leaflet marker PNGs are not used.
+
+The map lives at `/mission/:id/map`, revealed from the Transit screen's
+`// TACTICAL MAP //` link. Two markers, live user position from the shared
+GPS watch, no search, no routing — exactly the minimal reveal specced below.
 
 ### Map Style Per Adventure Style
 
@@ -515,9 +582,15 @@ If CartoDB tiles become unavailable or paid, the replacement is a single tile UR
 
 ### Completions, Not Points
 
-Progression is tracked as a count of verified completions, not abstract "experience points." A user has completed N places, with breakdown available per category (murals documented, sculptures documented, etc.). No XP, no levels, no rank ladder. Each location counts once toward the total — the 90-day re-entry rule allows the same location to count again later, but at any given moment a user's profile shows distinct places visited.
+Progression is tracked as a count of verified completions, not abstract "experience points." A user has completed N places, with breakdown available per category (murals documented, sculptures documented, etc.). No XP, no gates. Each location counts once toward the total — the 90-day re-entry rule allows the same location to count again later, but at any given moment a user's profile shows distinct places visited.
 
-This was simplified from an earlier XP/rank design — the count is more honest about what the user actually did, and a "ranks unlocked" gating system added complexity without changing behavior we wanted.
+**Rank titles (added post-v4):** each style carries an 11-step ladder of
+*cosmetic* titles derived purely from the completion count (Volunteer →
+Antiquarian for Pulp, Intern → Officer for Agency, Aspirant → Magister for
+Guild; see `frontend/static/js/style-meta.js` and `services/rank.py`). Titles
+gate nothing — they are flavor on the dossier and mission card. Mission cards
+snapshot the rank *as it was at completion time*, so old cards are mementos,
+not live dashboards.
 
 ### Weekly Activity
 
@@ -565,10 +638,15 @@ Badge names are re-skinned per style.
 
 | Function | Tool |
 |---|---|
-| Mission writing | Ollama Cloud (~$20/month flat rate) |
-| Future image enrichment | Ollama Cloud multimodal model |
-| Handler TTS | Kokoro-82M (self-hosted on VPS 2) |
-| Handler avatar art | Mistral Medium / Flux (existing credits) |
+| Mission writing (primary) | OLMo 2 13B, self-hosted Ollama on a shared GPU box (Tailscale) |
+| Mission writing (fallback) | OLMo 2 7B on the same box — engaged automatically when the 13B is evicted or persistently failing; reloads in seconds. `ai_model` on each mission records which model wrote it |
+| Future image enrichment | Deferred (Phase 3) |
+| Handler avatar art | Mistral Medium / Flux (done — three avatars shipped) |
+
+The shared GPU box is the one genuinely fragile dependency: other tenants can
+evict the model, which costs a reload (absorbed by the 120s timeout) or an
+outright failure (absorbed by the 7B fallback ladder). Generation is grammar-
+forced JSON with a single semantic repair retry per model.
 
 ### Geodata
 
@@ -590,11 +668,10 @@ VPS 2 (Hetzner, Ubuntu 24.04)
     ├── FastAPI backend
     ├── PostgreSQL + PostGIS (own instance, NOT shared with Paperclip)
     ├── Redis
-    ├── Static frontend assets
-    └── Kokoro TTS service
+    └── Static frontend assets
 ```
 
-Resource budget for the Dispatch Zero stack: target ≤ 2 GB resident memory and ≤ 5 GB disk for v1. The 4 GB swap is a safety margin for Kokoro synthesis spikes, not a planning baseline. UFW is active and limited to 22, 80, 443 once Dispatch Zero is deployed.
+Resource budget for the Dispatch Zero stack: target ≤ 2 GB resident memory and ≤ 5 GB disk for v1. The 4 GB swap is headroom, not a planning baseline. UFW is active and limited to 22, 80, 443 once Dispatch Zero is deployed.
 
 ### Authentication
 
@@ -613,9 +690,9 @@ A future opt-in recovery mechanism (one-time recovery code shown at signup, save
 | Service | Cost |
 |---|---|
 | Hetzner VPS 2 | €0/month (sunk cost — existing server) |
-| Ollama Cloud | ~$20/month |
+| Shared GPU inference box (OLMo 2 13B + 7B) | €0/month (existing shared hardware) |
 | All other services | Free |
-| **Total** | **~$20/month** |
+| **Total** | **~$0/month marginal** |
 
 ---
 
@@ -650,8 +727,7 @@ A future opt-in recovery mechanism (one-time recovery code shown at signup, save
 | `mission_thumbs_up` | Positive mission ratings |
 | `mission_thumbs_down` | Negative mission ratings |
 | `implicit_completions` | Verified completions without explicit rating |
-| `audio_url` | Cached Kokoro TTS file path |
-| `ai_model` | Model used to generate this mission |
+| `ai_model` | Model that wrote this mission (13B primary or 7B fallback) |
 | `status` | Active, needs_regen, retired |
 
 ### Mission Stop
@@ -793,7 +869,6 @@ A place is automatically flagged for review when it receives **3 or more negativ
 ### Still Undecided
 
 - **Final production domain** — `null.quest`, `cipher.quest`, `echo.quest`, or other. Not needed until launch.
-- **Exact Kokoro voice assignments** — which of the 54 preset voices maps to each handler style.
 - **Handler avatar final art direction** — to be created with Mistral Medium / Flux credits.
 - **Disk growth headroom on VPS 2** — 18 GB free after swap. Sufficient for v1 launch but will need monitoring; migration path to a larger Hetzner box exists if traffic justifies.
 
@@ -809,9 +884,9 @@ A place is automatically flagged for review when it receives **3 or more negativ
 - No email collected, no password reset — lost credentials are framed in-fiction as a compromised agent
 - No transactional email provider, no SMTP, no mail server involvement of any kind
 - Hetzner VPS 2 hosting (`89.167.39.152`, 2 vCPU / 3.7 GB RAM / 75 GB disk / 4 GB swap; coexists with Paperclip orchestrator on same box, no shared services)
-- Leaflet + CartoDB map stack
-- Kokoro-82M TTS self-hosted on VPS
-- Ollama Cloud for AI mission generation (~$20/mo); fallback is local Ollama with smaller model
+- Leaflet + CartoDB map stack (shipped; Leaflet vendored, no CDN)
+- TTS cut entirely — text-only briefings are the product (June 2026)
+- Self-hosted OLMo 2 for mission generation: 13B primary + 7B availability fallback on the shared GPU box
 - In-app photo capture with geolocation-based verification
 - No photo override button
 - Thumbnail-only photo storage (600×600px max, EXIF stripped, 70% JPEG, ~20–40KB each)
@@ -839,11 +914,10 @@ The MVP validates the core loop only:
 
 - Callsign + password account creation
 - Adventure style selection (all three)
-- ZIP code or geolocation input
+- Geolocation input (ZIP-code entry was descoped — geolocation only)
 - Scout missions only
 - Real place discovery from approved categories
-- AI-generated mission briefing via Ollama Cloud
-- Optional TTS playback via Kokoro
+- AI-generated mission briefing via self-hosted OLMo 2 (13B + 7B fallback)
 - In-app camera capture
 - Geolocation-based verification
 - Completion count + weekly activity counter, first badge set
@@ -861,7 +935,7 @@ The MVP validates the core loop only:
 
 - Build the single-stop Scout mission loop end to end.
 - Launch all three adventure styles with Zero personas.
-- Ship handler avatars and Kokoro voices.
+- Ship handler avatars. (Voices: cut — text-only.)
 - Implement mission library and rating logic.
 - Verify proof via capture geolocation.
 
