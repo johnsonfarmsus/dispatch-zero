@@ -79,10 +79,33 @@ Restore (manual; see the script footer for exact commands):
 - DB: `pg_restore -U <user> -d <db> --clean < db-<stamp>.dump`
 - uploads: `tar -xzf uploads-<stamp>.tar.gz -C /opt/dispatchzero`
 
-## Watching for problems (manual, no alerting shipped)
+## Watching for problems (log-only watchdog, no push alerts)
 
-Phase 14 deliberately does NOT include a push-alert system. To check
-on prod by hand:
+A cron watchdog runs on the VPS every 5 minutes and writes **state
+transitions only** to `/var/log/dz-watchdog.log`:
+
+- `GET /healthz/deep` (Postgres + Redis pings inside the app)
+- root-filesystem usage vs an 85% threshold (`DZ_DISK_THRESHOLD` to tune)
+- `docker compose ps` — any non-running service
+
+Healthy runs log at most one `HEARTBEAT` line per day, so the log stays
+readable for months and silence is distinguishable from a dead cron.
+
+```bash
+ssh root@89.167.39.152 "tail -20 /var/log/dz-watchdog.log"   # recent state
+ssh root@89.167.39.152 "grep DOWN /var/log/dz-watchdog.log"  # outage windows
+```
+
+Install (idempotent — safe to re-run):
+```bash
+ssh root@89.167.39.152 \
+  "chmod +x /opt/dispatchzero/deploy/watchdog.sh && \
+   (crontab -l 2>/dev/null | grep -q watchdog.sh || \
+    (crontab -l 2>/dev/null; echo '*/5 * * * * /opt/dispatchzero/deploy/watchdog.sh') | crontab -)"
+```
+
+There is deliberately no push alerting — checking the log is a pull.
+To check deeper by hand:
 
 **Recent app errors:**
 ```bash
@@ -104,15 +127,15 @@ ssh root@89.167.39.152 \
    && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps"
 ```
 
-If/when this becomes too manual, options for keeping things in-house:
+If/when log-only becomes too manual, options for keeping things in-house:
 
-- Self-hosted **ntfy** (single Go binary, run `ntfy serve` on VPS 3
-  next to Mailcow). Same protocol, same phone app, your own server
+- Self-hosted **ntfy** (single Go binary) on one of the VPSes. Same
+  protocol as the SaaS, same phone app, your own server
 - Self-hosted **GlitchTip** or **Bugsink** for error tracking with a
   dashboard, both Sentry-API compatible
-- A small cron + email script using your existing Mailcow on VPS 3
-- A cron on VPS 3 that hits `https://dispatchzero.../healthz` and
-  emails you on failure
+
+(Note: VPS 3 no longer runs a mail server, so the earlier cron+email
+ideas would need an SMTP relay that doesn't currently exist.)
 
 Pick when the scale demands it; not before.
 
