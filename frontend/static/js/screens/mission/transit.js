@@ -35,6 +35,14 @@ export async function transit({ id }) {
     "Closer, agent…");
   captureBtn.addEventListener("click", () => navigate(`/mission/${mission.id}/capture`));
 
+  // Map reveal is deliberately a secondary action (project doc: the compass
+  // is the primary navigation mode; the map appears on request only).
+  const mapLink = el("a", {
+    href: `/mission/${id}/map`, "data-route": true, class: "muted mono",
+    style: { textAlign: "center", padding: "var(--s-2)", fontSize: "var(--t-xs)",
+             letterSpacing: "0.05em" },
+  }, "// TACTICAL MAP //");
+
   // Stand-down link sits next to the capture button mid-mission. Native
   // confirm() guard so a stray thumb-tap doesn't kill an active dispatch.
   const standDownLink = el("a", {
@@ -154,7 +162,7 @@ export async function transit({ id }) {
       el("div", { class: "muted mono", style: { fontSize: "var(--t-xs)", textAlign: "center" } },
         `${(mission.place.name || "TARGET").toUpperCase()} // ${mission.place.category.toUpperCase()}`),
     ),
-    el("div", { class: "actions" }, captureBtn, standDownLink),
+    el("div", { class: "actions" }, captureBtn, mapLink, standDownLink),
   );
 
   return {

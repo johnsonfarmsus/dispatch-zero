@@ -11,6 +11,7 @@ import { dispatch as missionDispatch } from "./screens/mission/dispatch.js";
 import { dispatchChoose } from "./screens/dispatch-choose.js";
 import { objective as missionObjective } from "./screens/mission/objective.js";
 import { transit as missionTransit } from "./screens/mission/transit.js";
+import { missionMap } from "./screens/mission/map.js";
 import { capture as missionCapture } from "./screens/mission/capture.js";
 import { debrief as missionDebrief } from "./screens/mission/debrief.js";
 import { rate as missionRate } from "./screens/mission/rate.js";
@@ -53,6 +54,7 @@ async function bootstrap() {
   defineRoute("/mission/:id/dispatch", (p) => missionDispatch(p));
   defineRoute("/mission/:id/objective", (p) => missionObjective(p));
   defineRoute("/mission/:id/transit", (p) => missionTransit(p));
+  defineRoute("/mission/:id/map", (p) => missionMap(p));
   defineRoute("/mission/:id/capture", (p) => missionCapture(p));
   defineRoute("/mission/:id/debrief", (p) => missionDebrief(p));
   defineRoute("/completions/:id/rate", (p) => missionRate(p));

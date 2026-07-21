@@ -79,3 +79,45 @@
   color: var(--surface-bg);
   border-color: var(--accent);
 }
+
+/* Tactical map (Map screen) */
+.map-content {
+  padding: 0;
+  gap: 0;
+  /* Thin rule frames the map like a filed aerial photograph */
+  border: 1px solid var(--surface-rule);
+}
+
+.map-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  /* Leaflet paints tiles over this; until then, match the app surface
+     instead of flashing Leaflet's default light gray */
+  background: var(--surface-bg);
+}
+
+.map-canvas.map-error {
+  display: grid;
+  place-items: center;
+  padding: var(--s-5);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* divIcon wrapper — Leaflet applies a default white square + shadow class;
+   our pins are pure inline SVG, so strip all of it */
+.map-pin {
+  background: none;
+  border: none;
+}
+
+.map-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-xs);
+  border-bottom: 1px solid var(--surface-rule);
+}
