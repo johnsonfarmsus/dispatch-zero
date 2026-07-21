@@ -101,7 +101,6 @@ async def _mission_to_out(
         clue=clean_operative_address(mission.clue),
         badge_framing=mission.badge_framing,
         teaser=clean_operative_address(mission.teaser),
-        audio_url=mission.audio_url,
         ai_model=mission.ai_model,
         status=mission.status,
     )

@@ -40,7 +40,6 @@ class Mission(Base):
     mission_thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     implicit_completions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
-    audio_url: Mapped[str | None] = mapped_column(String(400), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
 

@@ -44,7 +44,6 @@ class MissionOut(BaseModel):
     clue: str | None
     badge_framing: str | None
     teaser: str | None
-    audio_url: str | None
     ai_model: str | None
     status: str
 
